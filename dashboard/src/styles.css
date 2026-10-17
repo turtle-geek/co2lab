@@ -590,6 +590,12 @@ code {
 .device__body > .device__detail--soft {
   fill: #cfb68f;
 }
+.device__body > .device__lip {
+  fill: #c4a57a;
+}
+.device--offline .device__body > .device__lip {
+  fill: #9d907b;
+}
 .device__body > .device__led {
   fill: var(--green);
   stroke: none;
@@ -598,14 +604,14 @@ code {
   fill: #6f4b2e;
 }
 .device__screen {
-  fill: #dfeccf;
+  fill: #cddfb9;
   transition: fill 0.5s ease;
 }
 .device__glow {
   animation: glow 2.6s ease-in-out infinite;
 }
 .device--working .device__screen {
-  fill: #e3f1d6;
+  fill: #d3e6c0;
 }
 /* offline: the whole device dims as one piece, screen off */
 .device--offline .device__body > * {
@@ -630,17 +636,23 @@ code {
 .device--offline .tree__zzz circle {
   fill: #a9b8ad;
 }
-.device--offline .device__body > .device__led {
+.device--offline .device__body > .device__lip {
+  fill: #c4a57a;
+}
+.device--offline .device__body > .device__lip {
+  fill: #9d907b;
+}
+.device__body > .device__led {
   fill: #7d8577;
 }
 .device--resting .device__screen {
-  fill: #ece6c4;
+  fill: #e1d9b2;
 }
 .device--hot .device__screen {
-  fill: #f3d8c6;
+  fill: #ebc9b3;
 }
 .device--error .device__screen {
-  fill: #f1d9d1;
+  fill: #e8c9bf;
 }
 .device--revoked .device__screen {
   fill: #c2b59c;

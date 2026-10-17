@@ -31,7 +31,7 @@ function Laptop() {
       {/* keyboard deck: a trapezoid whose top edge is exactly the lid's bottom edge */}
       <path d="M32 152 H208 L225 184 H15 Z" />
       {/* front edge: a thin slab under the deck for depth; its top edge covers the deck's bottom */}
-      <rect x="11" y="184" width="218" height="8" rx="4" />
+      <rect className="device__lip" x="13" y="184" width="214" height="7" rx="3.5" />
       <path className="device__detail device__detail--soft" d="M50 158 H190 L198 169 H42 Z" />
       <rect className="device__detail device__detail--soft" x="103" y="173" width="34" height="6" rx="3" />
       {/* lid: rounded on top, square at the hinge so it meets the deck in one line */}
