@@ -21,6 +21,20 @@ const args = parseArgs();
 const cloud = args.has("cloud");
 const headless = args.has("headless") || (cloud && !args.has("headed"));
 const deviceFile = deviceFilePath(args.str("device-file"));
+// A pairing saved for a different hub (e.g. an old tunnel URL) is set aside, so --hub always wins.
+const wantHub = args.str("hub")?.replace(/\/+$/, "");
+if (wantHub && existsSync(deviceFile)) {
+  let saved: string | null = null;
+  try {
+    saved = readDeviceFile(deviceFile).hubUrl.replace(/\/+$/, "");
+  } catch {
+    /* unreadable: pair again */
+  }
+  if (saved !== wantHub) {
+    renameSync(deviceFile, `${deviceFile}.old-${Date.now()}`);
+    log(`Saved pairing was for ${saved ?? "an unreadable file"}; pairing with ${wantHub} instead`);
+  }
+}
 if (!existsSync(deviceFile)) {
   try {
     await pairWithDeviceCode({ hubUrl: hubUrlFromEnv(args.str("hub")), deviceFile, cloud, name: args.str("name") });
