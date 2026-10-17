@@ -103,6 +103,9 @@ function isRetryable(err: unknown): boolean {
   return /fetch failed|ECONNRESET|ETIMEDOUT|socket hang up/i.test(msg);
 }
 
+/** Google API keys ("AIza…") can appear inside error messages; never let them reach logs or the dashboard. */
+const redactKeys = (s: string) => s.replace(/AIza[0-9A-Za-z_-]{10,}/g, "AIza…(key hidden)");
+
 function describe(err: unknown): string {
   if (err instanceof ApiError) {
     let m = err.message;
@@ -110,9 +113,9 @@ function describe(err: unknown): string {
       const parsed = JSON.parse(m);
       m = parsed?.error?.message ?? m;
     } catch {}
-    return `Gemini API ${err.status}: ${m.slice(0, 200)}`;
+    return redactKeys(`Gemini API ${err.status}: ${m.slice(0, 200)}`);
   }
-  return err instanceof Error ? err.message : String(err);
+  return redactKeys(err instanceof Error ? err.message : String(err));
 }
 
 export async function callJson<S extends z.ZodType>(opts: {
