@@ -1,0 +1,26 @@
+{
+  "name": "@co2lab/worker-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Co2lab web worker: Playwright reads RedFlagDeals food deals for the hub",
+  "scripts": {
+    "pair": "tsx src/pair.ts",
+    "start": "tsx src/main.ts",
+    "fake-hub": "tsx src/dev/fake-hub.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@co2lab/shared": "*",
+    "dotenv": "^17.2.0",
+    "playwright": "^1.56.0",
+    "systeminformation": "^5.27.0",
+    "ws": "^8.18.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.0",
+    "tsx": "^4.20.0"
+  }
+}
