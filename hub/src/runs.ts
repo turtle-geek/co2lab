@@ -312,7 +312,10 @@ export class RunManager {
     const dropped: string[] = [];
     const seen = new Set<string>();
     const computeDevice = this.deps.devices.active().some((d) => d.online && d.rec.kind !== "android");
-    for (const t of tasks) {
+    for (const t0 of tasks) {
+      // A web task aimed at a source that has a recipe (e.g. RedFlagDeals) runs the recipe: faster and rehearsed.
+      const recipe = t0.tool === "web" && (t0.source ?? (/redflagdeals\.com/i.test(t0.startUrl ?? "") ? "web:redflagdeals" : null));
+      const t: PlannedTask = recipe ? { ...t0, tool: "deals", source: recipe } : t0;
       if (t.tool === "deals") {
         if (!t.source || seen.has(t.source)) continue;
         seen.add(t.source);
