@@ -940,6 +940,10 @@ function reviewSummary(v: ComputeSetView): string {
   const pct = (p: number, n: number) => (p + n ? `${Math.round((100 * n) / (p + n))} % negative` : "no mentions");
   const aspects = [...v.aspects]
     .sort((a, b) => b.pos + b.neg - (a.pos + a.neg))
-    .map((a) => `${a.aspect}: ${a.pos + a.neg} mentions, ${pct(a.pos, a.neg)} (30 h+: ${pct(a.byPlaytime.over30h.pos, a.byPlaytime.over30h.neg)})`);
+    .map(
+      (a) =>
+        `${a.aspect}: ${((100 * a.neg) / Math.max(1, v.reviews.kept)).toFixed(1)} complaints per 100 reviews ` +
+        `(${a.pos + a.neg} mentions, ${pct(a.pos, a.neg)}; 30 h+: ${pct(a.byPlaytime.over30h.pos, a.byPlaytime.over30h.neg)})`,
+    );
   return `${v.reviews.kept} real reviews of ${v.reviews.fetched}${v.reviews.bombDays.length ? `, review-bomb days ${v.reviews.bombDays.join(", ")}` : ""}. ${aspects.join("; ")}`;
 }

@@ -239,7 +239,9 @@ export async function composeAnswer(o: { prompt: string; sections: AnswerSection
     system:
       "Answer the owner's request using only the findings below (each numbered section came from one device task). " +
       "text: a short, direct answer (2-5 sentences) with the key numbers. items: the best concrete options, ranked, each " +
-      "with the section number it came from. If the findings do not answer the request, say exactly what is missing.",
+      "with the section number it came from. If the findings do not answer the request, say exactly what is missing. " +
+      "For review analysis, compare games by complaints per 100 reviews (how common a problem is), not by the share of " +
+      "negative mentions alone, and say how many reviews were analyzed.",
     parts: [
       {
         text:
