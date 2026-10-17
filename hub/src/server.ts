@@ -118,6 +118,7 @@ for (const p of checkConfig()) log.warn(p);
 const shutdown = async () => {
   hub.stop();
   await app.close();
+  await repo.close?.().catch((e) => log.error("repo close", e));
   process.exit(0);
 };
 process.on("SIGINT", shutdown);

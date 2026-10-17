@@ -106,4 +106,7 @@ export interface Repository {
 
   upsertViewerLink(v: ViewerLinkRecord): Promise<void>;
   getViewerLink(tokenHash: string): Promise<ViewerLinkRecord | null>;
+
+  /** Finishes pending writes and releases connections (on shutdown). */
+  close?(): Promise<void>;
 }
