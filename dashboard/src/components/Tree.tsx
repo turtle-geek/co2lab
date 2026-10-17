@@ -97,9 +97,8 @@ const CROWN: Record<DeviceState, string> = {
   // asleep: round, narrower on top and a little chubbier toward a rounded bottom
   offline:
     "M100 34 C126 33 146 47 152 68 C157 84 162 100 158 114 C153 132 130 142 100 142 C70 142 47 132 42 114 C38 100 43 84 48 68 C54 47 74 35 100 34Z",
-  // resting (low battery): rounded top, leaves sagging down the sides
-  resting:
-    "M44 98 C41 54 70 36 100 36 C130 36 159 54 156 98 C154 120 144 132 132 127 C124 136 110 133 100 127 C90 133 76 136 68 127 C56 132 46 120 44 98Z",
+  // resting (low battery): the normal round crown; the tired face and paler colour do the talking
+  resting: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
   hot: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
   error: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
   // revoked: shrunken and withered
@@ -133,12 +132,6 @@ export function Tree({ mood, placement }: { mood: DeviceState; placement?: Place
       <g className="tree__crown">
         <g className="tree__crown-shape-group">
           <path className="tree__crown-shape" style={{ d: `path("${CROWN[mood]}")` }} />
-          {mood === "resting" && (
-            <>
-              <ellipse cx="50" cy="126" rx="9" ry="16" transform="rotate(18 50 126)" className="tree__leaf" />
-              <ellipse cx="150" cy="126" rx="9" ry="16" transform="rotate(-18 150 126)" className="tree__leaf" />
-            </>
-          )}
         </g>
         <g className="tree__face">
           {cheeks && (

@@ -46,8 +46,8 @@ function Phone() {
   return (
     <g className="device__body">
       {/* side buttons */}
-      <rect className="device__detail" x="177.5" y="56" width="3.5" height="26" rx="1.75" />
-      <rect className="device__detail" x="177.5" y="90" width="3.5" height="16" rx="1.75" />
+      <rect className="device__detail" x="177.5" y="56" width="4.3" height="26" rx="2" />
+      <rect className="device__detail" x="177.5" y="90" width="4.3" height="16" rx="2" />
       <rect x="61" y="7" width="118" height="206" rx="21" />
     </g>
   );

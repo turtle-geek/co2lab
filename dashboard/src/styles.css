@@ -392,7 +392,8 @@ code {
   font-size: 0.7rem;
   font-weight: 700;
   color: var(--ink-2);
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 252, 245, 0.94);
+  box-shadow: 0 1px 2px rgba(40, 50, 40, 0.12);
   border-radius: 999px;
   padding: 2px 8px;
 }
@@ -576,8 +577,13 @@ code {
   height: auto;
   display: block;
 }
+/* tall devices: drawn a little smaller (still centred) so they clear the type badge */
+.device--android,
+.device--cloud {
+  width: 84%;
+}
 .device__body > * {
-  fill: #e9d6b6;
+  fill: #f1e5cf;
   stroke: #6f4b2e;
   stroke-width: 3;
   stroke-linejoin: round;
@@ -593,9 +599,6 @@ code {
 .device__body > .device__lip {
   fill: #c4a57a;
 }
-.device--offline .device__body > .device__lip {
-  fill: #9d907b;
-}
 .device__body > .device__led {
   fill: var(--green);
   stroke: none;
@@ -604,25 +607,29 @@ code {
   fill: #6f4b2e;
 }
 .device__screen {
-  fill: #dfeccf;
+  fill: #c3d9ab;
   transition: fill 0.5s ease;
 }
 .device__glow {
   animation: glow 2.6s ease-in-out infinite;
 }
 .device--working .device__screen {
-  fill: #e3f1d6;
+  fill: #c9ddb3;
 }
 /* offline: the whole device dims as one piece, screen off */
 .device--offline .device__body > * {
-  fill: #bfb4a1;
+  fill: #c4bfb5;
   stroke: #5e4a39;
 }
 .device--offline .device__body > .device__detail {
   fill: #5e4a39;
+  stroke: none;
 }
 .device--offline .device__body > .device__detail--soft {
-  fill: #a69a86;
+  fill: #aba598;
+}
+.device--offline .device__body > .device__lip {
+  fill: #a09a8d;
 }
 .device--offline .device__screen {
   fill: #66715f;
@@ -636,20 +643,14 @@ code {
 .device--offline .tree__zzz circle {
   fill: #a9b8ad;
 }
-.device--offline .device__body > .device__lip {
-  fill: #c4a57a;
-}
-.device--offline .device__body > .device__lip {
-  fill: #9d907b;
-}
-.device__body > .device__led {
+.device--offline .device__body > .device__led {
   fill: #7d8577;
 }
 .device--resting .device__screen {
-  fill: #ece6c4;
+  fill: #ddd3a6;
 }
 .device--hot .device__screen {
-  fill: #f3d8c6;
+  fill: #e8c2a8;
 }
 .device--error .device__screen {
   fill: #f1d9d1;
@@ -680,6 +681,7 @@ code {
 }
 .tree__trunk {
   fill: var(--trunk);
+  transition: fill 0.7s ease;
 }
 .tree__crown-shape,
 .tree__leaf {
@@ -735,8 +737,9 @@ code {
 .tree--offline .tree__crown-shape {
   fill: #8fa489;
 }
+/* asleep, the trunk takes the dimmed device outline colour */
 .tree--offline .tree__trunk {
-  fill: #8a6a4f;
+  fill: #5e4a39;
 }
 .tree--offline .tree__cheeks ellipse {
   fill: #c98d80;
@@ -767,7 +770,6 @@ code {
   fill: #93ad57;
 }
 .tree--resting .tree__crown {
-  transform: translateY(6px) scaleY(0.96);
   animation: breathe 4s ease-in-out infinite;
 }
 
@@ -856,10 +858,10 @@ code {
 @keyframes breathe {
   0%,
   100% {
-    transform: translateY(6px) scaleY(0.96);
+    transform: scale(1);
   }
   50% {
-    transform: translateY(8px) scaleY(0.94);
+    transform: scale(0.975);
   }
 }
 @keyframes shimmer {
