@@ -28,11 +28,12 @@ const LAYOUT: Record<DeviceKind, { screen: Rect; tree: Box }> = {
 function Laptop() {
   return (
     <g className="device__body">
-      {/* keyboard deck: a trapezoid whose top edge is exactly the lid's bottom edge */}
+      {/* keyboard deck: a trapezoid whose top edge is exactly the lid's bottom edge; its sides
+          slope 17 px over 32 px, and the keyboard inset below uses the same slope */}
       <path d="M32 152 H208 L225 184 H15 Z" />
-      {/* front edge: a thin slab under the deck for depth; its top edge covers the deck's bottom */}
-      <rect className="device__lip" x="13" y="184" width="214" height="7" rx="3.5" />
-      <path className="device__detail device__detail--soft" d="M50 158 H190 L198 169 H42 Z" />
+      {/* front edge: a slab tucked slightly inside the deck's bottom corners, for depth */}
+      <rect className="device__lip" x="20" y="184" width="200" height="10" rx="4" />
+      <path className="device__detail device__detail--soft" d="M47 158 H193 L198.84 169 H41.16 Z" />
       <rect className="device__detail device__detail--soft" x="103" y="173" width="34" height="6" rx="3" />
       {/* lid: rounded on top, square at the hinge so it meets the deck in one line */}
       <path d="M43 12 H197 A11 11 0 0 1 208 23 V152 H32 V23 A11 11 0 0 1 43 12 Z" />
