@@ -14,7 +14,8 @@ export type AppId = z.infer<typeof AppId>;
 export const Capability = z.string().regex(/^(web|app:[a-z0-9-]+)$/);
 export type Capability = z.infer<typeof Capability>;
 
-export const DeviceKind = z.enum(["android", "laptop", "cloud"]);
+/** `desktop` is a computer without a battery or a portable chassis (found by the web worker's auto-detection). */
+export const DeviceKind = z.enum(["android", "laptop", "desktop", "cloud"]);
 export type DeviceKind = z.infer<typeof DeviceKind>;
 
 /** Derived by the hub from heartbeat, telemetry, and work. Drives the tree mood. */
@@ -200,6 +201,38 @@ export const ExperimentView = z.object({
 });
 export type ExperimentView = z.infer<typeof ExperimentView>;
 
+/** What a computer reports about itself when it asks to join (web worker auto-detection). */
+export const DeviceInfo = z.object({
+  hostname: z.string().max(100),
+  /** e.g. "Windows 11 Pro 10.0.26200" or "Ubuntu 24.04". */
+  os: z.string().max(100),
+  arch: z.string().max(20),
+  /** e.g. "Dell Inc. XPS 13 9310"; null when the firmware reports nothing useful. */
+  model: z.string().max(100).nullable(),
+  /** e.g. "Intel Core i7-1185G7 (8 threads)". */
+  cpu: z.string().max(100).nullable(),
+  ramGb: z.number().nullable(),
+  hasBattery: z.boolean(),
+  /** Browser Playwright will drive, e.g. "Microsoft Edge"; null when none was found. */
+  browser: z.string().max(60).nullable(),
+});
+export type DeviceInfo = z.infer<typeof DeviceInfo>;
+
+/** A device-code request waiting for the owner. */
+export const PendingDevice = z.object({
+  /** Short code the device prints, e.g. "BKDF-QRWT". */
+  userCode: z.string(),
+  name: z.string(),
+  kind: DeviceKind,
+  capabilities: z.array(Capability),
+  info: DeviceInfo,
+  /** Public IP the request came from, so the owner can spot a stranger. */
+  ip: z.string().nullable(),
+  createdAt: z.number(),
+  expiresAt: z.number(),
+});
+export type PendingDevice = z.infer<typeof PendingDevice>;
+
 // ---------- Handshake (first message on every socket) ----------
 
 export const Hello = z.object({
@@ -273,6 +306,9 @@ export const ClientToHub = z.discriminatedUnion("type", [
   Hello,
   z.object({ type: z.literal("run.create"), clientRunId: z.string().min(1), prompt: z.string().min(1).max(500) }),
   z.object({ type: z.literal("pair.start") }),
+  /** Approve a pending device-code request (see `POST /api/device-code`). `name` renames the device. */
+  z.object({ type: z.literal("devicecode.approve"), userCode: z.string(), name: z.string().trim().min(1).max(60).optional() }),
+  z.object({ type: z.literal("devicecode.deny"), userCode: z.string() }),
   z.object({ type: z.literal("device.revoke"), deviceId: z.string() }),
   z.object({ type: z.literal("viewer.create"), ttlMinutes: z.number().int().min(5).max(24 * 60).optional() }),
   z.object({ type: z.literal("share.request"), runId: z.string(), target: z.string() }),
@@ -324,6 +360,8 @@ export const HubToClient = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run.update"), run: RunView }),
   z.object({ type: z.literal("pair.code"), code: z.string().regex(/^\d{6}$/), qrPayload: z.string(), expiresAt: z.number() }),
   z.object({ type: z.literal("viewer.link"), url: z.string(), expiresAt: z.number() }),
+  /** Owners only: sent after the snapshot and whenever the list changes. `hubUrl` fills in the install one-liner. */
+  z.object({ type: z.literal("devicecode.list"), hubUrl: z.string(), pending: z.array(PendingDevice) }),
   z.object({ type: z.literal("approval.request"), approval: ApprovalView }),
   z.object({ type: z.literal("approval.resolved"), approvalId: z.string(), approved: z.boolean() }),
   z.object({ type: z.literal("research.update"), experiment: ExperimentView }),
@@ -344,6 +382,43 @@ export type PairRequest = z.infer<typeof PairRequest>;
 
 export const PairResponse = z.object({ deviceId: z.string(), token: z.string() });
 export type PairResponse = z.infer<typeof PairResponse>;
+
+/**
+ * Device-code pairing for computers (like `gh auth login`). No secret is needed to start:
+ * nothing gets a token until the owner approves the request in the dashboard.
+ * POST /api/device-code -> DeviceCodeStartResponse; then POST /api/device-code/poll every `intervalS`.
+ */
+export const DeviceCodeStartRequest = z.object({
+  name: z.string().trim().min(1).max(60),
+  kind: z.enum(["laptop", "desktop", "cloud"]),
+  capabilities: z.array(Capability).min(1),
+  info: DeviceInfo,
+});
+export type DeviceCodeStartRequest = z.infer<typeof DeviceCodeStartRequest>;
+
+export const DeviceCodeStartResponse = z.object({
+  /** Secret the device polls with. Never shown to the owner. */
+  deviceCode: z.string(),
+  userCode: z.string(),
+  /** Page where the owner approves; `verificationUrlComplete` has the code filled in. */
+  verificationUrl: z.string(),
+  verificationUrlComplete: z.string(),
+  expiresAt: z.number(),
+  intervalS: z.number().int(),
+});
+export type DeviceCodeStartResponse = z.infer<typeof DeviceCodeStartResponse>;
+
+export const DeviceCodePollRequest = z.object({ deviceCode: z.string().min(1).max(200) });
+
+/** 200 for every state; `slow_down` means poll less often. */
+export const DeviceCodePollResponse = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("pending") }),
+  z.object({ status: z.literal("slow_down") }),
+  z.object({ status: z.literal("approved"), deviceId: z.string(), token: z.string(), name: z.string() }),
+  z.object({ status: z.literal("denied") }),
+  z.object({ status: z.literal("expired") }),
+]);
+export type DeviceCodePollResponse = z.infer<typeof DeviceCodePollResponse>;
 
 /** POST /api/login -> sets httpOnly session cookie. */
 export const LoginRequest = z.object({ passphrase: z.string().min(1) });

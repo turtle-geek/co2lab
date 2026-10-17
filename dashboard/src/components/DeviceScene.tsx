@@ -10,7 +10,7 @@ type Rect = { x: number; y: number; width: number; height: number; rx: number };
 type Box = { x: number; y: number; width: number; height: number };
 
 /** Where the screen is in each device, and where the tree sits on it (240×220 canvas). */
-const LAYOUT: Record<DeviceKind, { screen: Rect; tree: Box }> = {
+const LAYOUT: Record<Exclude<DeviceKind, "desktop">, { screen: Rect; tree: Box }> = {
   laptop: {
     screen: { x: 42, y: 22, width: 156, height: 120, rx: 6 },
     tree: { x: 60, y: 22, width: 120, height: 120 },
@@ -68,11 +68,13 @@ function Server() {
 export function DeviceScene({ kind, mood }: { kind: DeviceKind; mood: DeviceState }) {
   const id = useId().replace(/:/g, "");
   // The tree keeps the same spot in every mood so the trunk never jumps; only the crown morphs.
-  const { screen, tree } = LAYOUT[kind];
+  // Desktops are drawn as laptops for now.
+  const art = kind === "desktop" ? "laptop" : kind;
+  const { screen, tree } = LAYOUT[art];
   const clip = `screen-${id}`;
   const glow = `glow-${id}`;
   return (
-    <svg className={`device device--${kind} device--${mood}`} viewBox="0 0 240 220" aria-hidden>
+    <svg className={`device device--${art} device--${mood}`} viewBox="0 0 240 220" aria-hidden>
       <defs>
         <clipPath id={clip}>
           <rect {...screen} />
@@ -84,14 +86,14 @@ export function DeviceScene({ kind, mood }: { kind: DeviceKind; mood: DeviceStat
         </radialGradient>
       </defs>
 
-      {kind === "laptop" ? <Laptop /> : kind === "android" ? <Phone /> : <Server />}
+      {art === "laptop" ? <Laptop /> : art === "android" ? <Phone /> : <Server />}
 
       <g clipPath={`url(#${clip})`}>
         <rect className="device__screen" {...screen} />
         {mood === "working" && <rect className="device__glow" {...screen} fill={`url(#${glow})`} />}
         <Tree mood={mood} placement={tree} />
       </g>
-      {kind === "laptop" && <circle className="device__cam" cx="120" cy="17" r="2" />}
+      {art === "laptop" && <circle className="device__cam" cx="120" cy="17" r="2" />}
       {kind === "android" && <circle className="device__cam" cx="120" cy="25" r="3.2" />}
     </svg>
   );

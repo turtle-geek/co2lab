@@ -1,19 +1,36 @@
-// npm start                 -> headed Chromium on the laptop (judges see the browser)
+// npm start                 -> headed Edge/Chrome on the laptop (judges see the browser)
 // npm start -- --cloud      -> headless, for the Vultr "Cloud worker"
-// Other flags: --device-file <path>, --headless / --headed, --evidence-images
+// Not paired yet? It runs device-code pairing first (needs --hub <url> or WORKER_HUB_URL).
+// Other flags: --device-file <path>, --headless / --headed, --evidence-images, --pair-only, --hub <url>, --name <name>
 
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { existsSync, renameSync } from "node:fs";
+import type { Browser, BrowserContext, Page } from "playwright";
 import { HEARTBEAT_MS, type HubToDevice } from "@co2lab/shared";
-import { parseArgs, deviceFilePath, readDeviceFile, log } from "./config.js";
+import { parseArgs, deviceFilePath, readDeviceFile, hubUrlFromEnv, log } from "./config.js";
+import { launchBrowser } from "./browser.js";
+import { pairWithDeviceCode } from "./pairing.js";
 import { TelemetrySampler } from "./telemetry.js";
 import { HubClient } from "./hub-client.js";
 import { WebTask, VIEWPORT } from "./web-task.js";
 import { blankHtml } from "./reader-view.js";
 
+/** The hub rejected this device's token; the startup loop stops on this code instead of retrying. */
+const EXIT_REJECTED = 3;
+
 const args = parseArgs();
 const cloud = args.has("cloud");
 const headless = args.has("headless") || (cloud && !args.has("headed"));
-const device = readDeviceFile(deviceFilePath(args.str("device-file")));
+const deviceFile = deviceFilePath(args.str("device-file"));
+if (!existsSync(deviceFile)) {
+  try {
+    await pairWithDeviceCode({ hubUrl: hubUrlFromEnv(args.str("hub")), deviceFile, cloud, name: args.str("name") });
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+}
+if (args.has("pair-only")) process.exit(0);
+const device = readDeviceFile(deviceFile);
 const taskOpts = {
   threads: Number(process.env.WORKER_THREADS ?? 5),
   dwellMs: Number(process.env.WORKER_DWELL_MS ?? 3_000),
@@ -22,10 +39,11 @@ const taskOpts = {
 
 log(`Co2lab web worker "${device.name}" (${device.kind}, ${headless ? "headless" : "headed"})`);
 
-const browser: Browser = await chromium.launch({
+const { browser, label: browserLabel }: { browser: Browser; label: string } = await launchBrowser({
   headless,
   args: headless ? [] : [`--window-size=${VIEWPORT.width + 20},${VIEWPORT.height + 120}`],
 });
+log(`Browser: ${browserLabel}`);
 const ctx: BrowserContext = await browser.newContext({ viewport: VIEWPORT });
 // A page that stays open while idle, so the headed window does not vanish between subtasks.
 const idlePage: Page = await ctx.newPage();
@@ -43,7 +61,13 @@ const hub = new HubClient({
   onMessage,
   onFatal: (reason) => {
     log(reason);
-    void shutdown(1);
+    // Move the dead token aside so the next start (or installer run) asks the owner again.
+    try {
+      renameSync(deviceFile, `${deviceFile}.rejected`);
+    } catch {
+      /* already gone */
+    }
+    void shutdown(EXIT_REJECTED);
   },
 });
 hub.connect();

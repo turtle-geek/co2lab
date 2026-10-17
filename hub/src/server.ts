@@ -1,10 +1,10 @@
 // Co2lab hub entry point: Fastify HTTP + ws WebSocket on one port.
 
-import { existsSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import fastifyStatic from "@fastify/static";
-import { LoginRequest, PairRequest, WS_PATH } from "@co2lab/shared";
+import { DeviceCodePollRequest, DeviceCodeStartRequest, LoginRequest, PairRequest, WS_PATH } from "@co2lab/shared";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { checkConfig, config, ownerLoginEnabled } from "./config.js";
 import { SESSION_COOKIE, SESSION_TTL_MS, makeSessionValue, parseCookies, safeEqual, verifySessionValue } from "./crypto.js";
@@ -55,6 +55,55 @@ app.post("/api/pair", async (req, reply) => {
   const r = await hub.pairDevice(body.data);
   if (!r.ok) return reply.code(400).send({ error: r.error });
   return { deviceId: r.deviceId, token: r.token };
+});
+
+// ---------- Device-code pairing (computers; see shared/PROTOCOL.md) ----------
+
+app.post("/api/device-code", async (req, reply) => {
+  const body = DeviceCodeStartRequest.safeParse(req.body);
+  if (!body.success) return reply.code(400).send({ error: "bad_request", detail: body.error.issues[0]?.message });
+  const r = hub.startDeviceCode(body.data, req.ip ?? null);
+  if (!r.ok) return reply.code(429).send({ error: r.error });
+  const verificationUrl = `${config.publicUrl}/approve`;
+  return {
+    deviceCode: r.deviceCode,
+    userCode: r.userCode,
+    verificationUrl,
+    verificationUrlComplete: `${verificationUrl}?code=${r.userCode}`,
+    expiresAt: r.expiresAt,
+    intervalS: r.intervalS,
+  };
+});
+
+app.post("/api/device-code/poll", async (req, reply) => {
+  const body = DeviceCodePollRequest.safeParse(req.body);
+  if (!body.success) return reply.code(400).send({ error: "bad_request" });
+  const r = hub.deviceCodes.poll(body.data.deviceCode);
+  if (!r) return reply.code(404).send({ error: "unknown_code" });
+  return r;
+});
+
+// ---------- One-line installer for computers ----------
+// irm https://<hub>/install.ps1 | iex   (Windows)   curl -fsSL https://<hub>/install.sh | sh   (macOS, Linux)
+
+async function sendInstaller(reply: FastifyReply, file: string, type: string) {
+  try {
+    const text = (await readFile(join(config.installDir, file), "utf8")).replaceAll("__HUB_URL__", config.publicUrl);
+    return reply.type(type).header("cache-control", "no-store").send(text);
+  } catch {
+    return reply.code(404).send({ error: "installer_missing" });
+  }
+}
+app.get("/install.ps1", async (_req, reply) => sendInstaller(reply, "install.ps1", "text/plain; charset=utf-8"));
+app.get("/install.sh", async (_req, reply) => sendInstaller(reply, "install.sh", "text/x-shellscript; charset=utf-8"));
+app.get("/install/worker.tgz", async (_req, reply) => {
+  if (!existsSync(config.workerBundle))
+    return reply.code(404).type("text/plain").send("The worker bundle is not built. On the hub run: npm run bundle -w worker-web\n");
+  return reply
+    .type("application/gzip")
+    .header("cache-control", "no-store")
+    .header("content-disposition", 'attachment; filename="co2lab-worker.tgz"')
+    .send(createReadStream(config.workerBundle));
 });
 
 // ---------- Health ----------

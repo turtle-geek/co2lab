@@ -6,8 +6,12 @@ import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
 import { z } from "zod";
 
-export const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-loadEnv({ path: resolve(PKG_DIR, "..", ".env"), quiet: true });
+const HERE = dirname(fileURLToPath(import.meta.url));
+/** worker-web/ in the repo (this file is in src/); the install folder for the bundle (worker.mjs sits next to package.json). */
+export const PKG_DIR = existsSync(resolve(HERE, "package.json")) ? HERE : resolve(HERE, "..");
+/** True when running from the installed bundle rather than the repo. */
+export const BUNDLED = PKG_DIR === HERE;
+loadEnv({ path: resolve(PKG_DIR, BUNDLED ? ".env" : "../.env"), quiet: true });
 
 /** Tiny flag parser: `--name X`, `--cloud`, positional args. */
 export function parseArgs(argv = process.argv.slice(2)) {
@@ -26,14 +30,14 @@ export function parseArgs(argv = process.argv.slice(2)) {
   const str = (k: string) => (typeof flags[k] === "string" ? (flags[k] as string) : undefined);
   return { flags, positional, str, has: (k: string) => flags[k] !== undefined };
 }
-const BOOLEAN_FLAGS = new Set(["cloud", "headless", "headed", "evidence-images"]);
+const BOOLEAN_FLAGS = new Set(["cloud", "headless", "headed", "evidence-images", "pair-only"]);
 
 export const DeviceFile = z.object({
   hubUrl: z.string().url(),
   deviceId: z.string(),
   token: z.string(),
   name: z.string(),
-  kind: z.enum(["laptop", "cloud"]),
+  kind: z.enum(["laptop", "desktop", "cloud"]),
 });
 export type DeviceFile = z.infer<typeof DeviceFile>;
 
@@ -43,7 +47,7 @@ export function deviceFilePath(override?: string): string {
 
 export function readDeviceFile(path: string): DeviceFile {
   if (!existsSync(path)) {
-    throw new Error(`No device file at ${path}. Pair first: npm run pair -- <6-digit code>`);
+    throw new Error(`No device file at ${path}. Pair first: npm run pair`);
   }
   return DeviceFile.parse(JSON.parse(readFileSync(path, "utf8")));
 }
@@ -54,7 +58,7 @@ export function writeDeviceFile(path: string, data: DeviceFile): void {
 
 export function hubUrlFromEnv(override?: string): string {
   const url = override ?? process.env.WORKER_HUB_URL ?? process.env.HUB_PUBLIC_URL;
-  if (!url) throw new Error("Set WORKER_HUB_URL in the root .env (or pass --hub <url>)");
+  if (!url) throw new Error("Pass --hub <url> (or set WORKER_HUB_URL in the root .env)");
   return url.replace(/\/+$/, "");
 }
 

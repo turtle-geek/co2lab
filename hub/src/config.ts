@@ -32,6 +32,9 @@ export const config = {
     },
   },
   dashboardDist: resolve(ROOT_DIR, "dashboard", "dist"),
+  /** install.ps1 / install.sh templates and the prebuilt worker bundle (`npm run bundle -w worker-web`). */
+  installDir: resolve(ROOT_DIR, "worker-web", "install"),
+  workerBundle: resolve(ROOT_DIR, "worker-web", "dist", "co2lab-worker.tgz"),
   dataDir: resolve(HUB_DIR, "data"),
   envPath,
   envLoaded: existsSync(envPath),

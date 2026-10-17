@@ -54,6 +54,8 @@ function TelemetryLine({ device, now }: { device: DeviceView; now: number }) {
   );
 }
 
+const KIND_LABEL: Record<DeviceView["kind"], string> = { android: "Phone", laptop: "Laptop", desktop: "Desktop", cloud: "Cloud" };
+
 export function TreeCard({ device, readOnly, onRevoke }: { device: DeviceView; readOnly: boolean; onRevoke(id: string): void }) {
   const now = useNow();
   const [confirming, setConfirming] = useState(false);
@@ -62,7 +64,7 @@ export function TreeCard({ device, readOnly, onRevoke }: { device: DeviceView; r
     <article className={`card tree-card tree-card--${device.state}`} aria-label={`${device.name}, ${STATE_LABEL[device.state]}`}>
       <div className="tree-card__art">
         <DeviceScene kind={device.kind} mood={device.state} />
-        <span className="tree-card__kind">{device.kind === "android" ? "Phone" : device.kind === "laptop" ? "Laptop" : "Cloud"}</span>
+        <span className="tree-card__kind">{KIND_LABEL[device.kind]}</span>
       </div>
       <div className="tree-card__body">
         <div className="tree-card__title">

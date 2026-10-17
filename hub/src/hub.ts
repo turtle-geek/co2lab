@@ -10,12 +10,14 @@ import {
   type DeviceView,
   type HubToClient,
   type HubToDevice,
+  type DeviceCodeStartRequest,
   type PairRequest,
 } from "@co2lab/shared";
 import { ulid } from "ulid";
 import { WebSocket, WebSocketServer } from "ws";
 import { config } from "./config.js";
 import { SESSION_COOKIE, parseCookies, randomToken, sha256, verifySessionValue } from "./crypto.js";
+import { DeviceCodes } from "./deviceCodes.js";
 import { DeviceRegistry, type LiveDevice } from "./devices.js";
 import { log } from "./log.js";
 import { Pairing, type RedeemError } from "./pairing.js";
@@ -38,6 +40,7 @@ export class Hub {
   readonly devices: DeviceRegistry;
   readonly runs: RunManager;
   readonly pairing = new Pairing();
+  readonly deviceCodes = new DeviceCodes();
   private clients = new Set<ClientConn>();
   private wss = new WebSocketServer({ noServer: true, maxPayload: MAX_WS_PAYLOAD });
   private timers: NodeJS.Timeout[] = [];
@@ -87,6 +90,15 @@ export class Hub {
 
   sendToDevice(d: LiveDevice, msg: HubToDevice) {
     if (d.socket) this.sendRaw(d.socket, msg);
+  }
+
+  /** Owners only (viewers never see who is asking to join). */
+  private broadcastOwners(msg: HubToClient) {
+    for (const c of this.clients) if (c.role === "owner") this.sendRaw(c.ws, msg);
+  }
+
+  private deviceCodeList(): HubToClient {
+    return { type: "devicecode.list", hubUrl: config.publicUrl, pending: this.deviceCodes.pendingList() };
   }
 
   publishDevice(d: LiveDevice) {
@@ -155,6 +167,20 @@ export class Hub {
   async pairDevice(req: PairRequest): Promise<{ ok: true; deviceId: string; token: string } | { ok: false; error: RedeemError }> {
     const r = this.pairing.redeem(req.code);
     if (!r.ok) return r;
+    return { ok: true, ...(await this.addDevice(req)) };
+  }
+
+  /** POST /api/device-code: a computer asks to join; it shows up in the owner's pending list. */
+  startDeviceCode(body: DeviceCodeStartRequest, ip: string | null) {
+    const r = this.deviceCodes.start(body, ip);
+    if (r.ok) {
+      log.info(`device code ${r.userCode} requested by "${body.name}" (${body.kind}) from ${ip ?? "?"}`);
+      this.broadcastOwners(this.deviceCodeList());
+    }
+    return r;
+  }
+
+  private async addDevice(req: Pick<PairRequest, "name" | "kind" | "capabilities">) {
     const token = randomToken(32);
     const d = await this.devices.add({
       id: ulid(),
@@ -167,7 +193,7 @@ export class Hub {
     });
     log.info(`paired ${d.rec.name} (${d.rec.kind}) ${d.rec.capabilities.join(",")}`);
     this.publishDevice(d);
-    return { ok: true, deviceId: d.rec.id, token };
+    return { deviceId: d.rec.id, token };
   }
 
   private async createViewerLink(ttlMinutes = VIEWER_LINK_DEFAULT_TTL_MIN) {
@@ -278,6 +304,7 @@ export class Hub {
     const conn: ClientConn = { ws, role, viewerExpiresAt };
     this.clients.add(conn);
     this.sendRaw(ws, this.snapshot(role));
+    if (role === "owner") this.sendRaw(ws, this.deviceCodeList());
     for (const d of this.devices.active()) if (d.latestFrame && d.online) this.sendRaw(ws, d.latestFrame);
     ws.on("close", () => this.clients.delete(conn));
     ws.on("message", (raw) => {
@@ -309,6 +336,23 @@ export class Hub {
       case "pair.start": {
         const { code, expiresAt } = this.pairing.create();
         this.sendRaw(ws, { type: "pair.code", code, qrPayload: pairingQrPayload(config.publicUrl, code), expiresAt });
+        return;
+      }
+      case "devicecode.approve": {
+        const r = this.deviceCodes.approve(msg.userCode, msg.name);
+        if (!r.ok) {
+          const message = r.error === "expired" ? "that code expired; run the installer again" : "no pending device with that code";
+          this.sendRaw(ws, { type: "error", code: `devicecode_${r.error}`, message });
+          return;
+        }
+        const { deviceId, token } = await this.addDevice(r.req);
+        this.deviceCodes.grant(msg.userCode, { deviceId, token, name: r.req.name });
+        this.broadcastOwners(this.deviceCodeList());
+        return;
+      }
+      case "devicecode.deny": {
+        if (this.deviceCodes.deny(msg.userCode)) log.info(`device code ${msg.userCode} denied`);
+        this.broadcastOwners(this.deviceCodeList());
         return;
       }
       case "device.revoke": {

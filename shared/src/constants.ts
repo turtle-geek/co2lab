@@ -7,6 +7,13 @@ export const OFFLINE_AFTER_MS = 6_000;
 export const PAIRING_CODE_TTL_MS = 5 * 60_000;
 export const PAIRING_CODE_MAX_ATTEMPTS = 5;
 
+/** Device-code pairing (computers): codes live 10 min; the device polls every few seconds. */
+export const DEVICE_CODE_TTL_MS = 10 * 60_000;
+export const DEVICE_CODE_POLL_S = 3;
+/** Per client IP, and in total, so nobody can flood the owner's approval list. */
+export const DEVICE_CODE_MAX_PER_IP = 5;
+export const DEVICE_CODE_MAX_PENDING = 20;
+
 export const VIEWER_LINK_DEFAULT_TTL_MIN = 120;
 
 /** Live-screen frames: devices downscale to this width and send about this often. */

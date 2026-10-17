@@ -6,6 +6,7 @@ import type {
   DeviceView,
   ExperimentView,
   HubToClient,
+  PendingDevice,
   RunView,
 } from "@co2lab/shared";
 
@@ -42,6 +43,10 @@ export interface HubState {
   steps: Record<string, LiveStep>;
   pairCode: PairCode | null;
   viewerLink: { url: string; expiresAt: number } | null;
+  /** Computers waiting for the owner to approve them (device-code pairing). */
+  pendingDevices: PendingDevice[];
+  /** Public hub URL, for the install one-liner. */
+  hubUrl: string | null;
   lastError: { code: string; message: string; at: number } | null;
   /** Ids of devices that showed up after the snapshot (pairing success). */
   newDeviceIds: string[];
@@ -59,6 +64,8 @@ export const initialState: HubState = {
   steps: {},
   pairCode: null,
   viewerLink: null,
+  pendingDevices: [],
+  hubUrl: null,
   lastError: null,
   newDeviceIds: [],
 };
@@ -125,6 +132,8 @@ export function reduce(state: HubState, msg: Action): HubState {
       return { ...state, runs: upsert(state.runs, msg.run) };
     case "pair.code":
       return { ...state, pairCode: { code: msg.code, qrPayload: msg.qrPayload, expiresAt: msg.expiresAt } };
+    case "devicecode.list":
+      return { ...state, pendingDevices: msg.pending, hubUrl: msg.hubUrl };
     case "viewer.link":
       return { ...state, viewerLink: { url: msg.url, expiresAt: msg.expiresAt } };
     case "approval.request":

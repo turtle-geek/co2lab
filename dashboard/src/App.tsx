@@ -17,7 +17,9 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
   const hub = useHub(backend, role, viewerToken ?? undefined);
   const { state, status } = hub;
   const [tab, setTab] = useState<Tab>("devices");
-  const [pairOpen, setPairOpen] = useState(false);
+  // https://<hub>/approve?code=XXXX-XXXX (printed by the worker installer) opens the add-device dialog.
+  const [approveCode] = useState(() => (location.pathname === "/approve" ? new URLSearchParams(location.search).get("code") ?? "" : null));
+  const [pairOpen, setPairOpen] = useState(approveCode !== null);
   const [shareOpen, setShareOpen] = useState(false);
   const DevPanel = backend.DevPanel;
 
@@ -68,6 +70,9 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
   function openPair() {
     hub.dispatch({ type: "local.clearPair" });
     setPairOpen(true);
+  }
+
+  function newPairCode() {
     hub.send({ type: "pair.start" });
   }
 
@@ -170,10 +175,16 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
           pair={state.pairCode}
           paired={pairedDevice}
           connected={connected}
-          onNewCode={() => hub.send({ type: "pair.start" })}
+          pending={state.pendingDevices}
+          hubUrl={state.hubUrl}
+          highlightCode={approveCode}
+          onNewCode={newPairCode}
+          onApprove={(userCode, name) => hub.send({ type: "devicecode.approve", userCode, name })}
+          onDeny={(userCode) => hub.send({ type: "devicecode.deny", userCode })}
           onClose={() => {
             setPairOpen(false);
             hub.dispatch({ type: "local.clearPair" });
+            if (location.pathname === "/approve") history.replaceState(null, "", "/");
           }}
         />
       )}
