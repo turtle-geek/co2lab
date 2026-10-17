@@ -378,7 +378,15 @@ export const ComputeSetView = z.object({
     /** Days with a burst of negative reviews (review bombing), as YYYY-MM-DD. */
     bombDays: z.array(z.string()),
   }),
-  batches: z.object({ total: z.number().int(), done: z.number().int(), inFlight: z.number().int(), retried: z.number().int() }),
+  batches: z.object({
+    total: z.number().int(),
+    done: z.number().int(),
+    inFlight: z.number().int(),
+    retried: z.number().int(),
+    /** Batches given up after 3 failed tries; their reviews are not in the results. */
+    dropped: z.number().int(),
+    droppedReviews: z.number().int(),
+  }),
   sentences: z.number().int(),
   devices: z.array(ComputeDeviceView),
   /** In-run feedback decisions, newest last (e.g. "paused Dragonfly at 39 °C"). */

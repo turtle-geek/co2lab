@@ -16,13 +16,15 @@ const COMPUTE_DIR = join(PKG_DIR, BUNDLED ? "compute" : "../hub/data/compute-cac
 type Transformers = typeof import("@huggingface/transformers");
 let loading: Promise<Transformers> | null = null;
 
-function npmBin(): string {
-  // Portable Node and the official installer both put npm next to node.
+/**
+ * npm's own CLI script, run with this Node and no shell (a shell breaks on "C:\Program Files\...").
+ * Windows (installer and portable zip): <node dir>/node_modules/npm; Linux/macOS: <prefix>/lib/node_modules/npm.
+ */
+function npmCommand(): { file: string; args: string[]; shell: boolean } {
   const dir = dirname(process.execPath);
-  const win = join(dir, "npm.cmd");
-  if (process.platform === "win32" && existsSync(win)) return win;
-  const unix = join(dir, "npm");
-  return existsSync(unix) ? unix : "npm";
+  for (const cli of [join(dir, "node_modules", "npm", "bin", "npm-cli.js"), join(dir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")])
+    if (existsSync(cli)) return { file: process.execPath, args: [cli], shell: false };
+  return process.platform === "win32" ? { file: "npm.cmd", args: [], shell: true } : { file: "npm", args: [], shell: false };
 }
 
 function installRuntime(): Promise<void> {
@@ -30,11 +32,12 @@ function installRuntime(): Promise<void> {
   const pkg = join(COMPUTE_DIR, "package.json");
   if (!existsSync(pkg)) writeFileSync(pkg, JSON.stringify({ name: "co2lab-compute", private: true }) + "\n");
   log(`Installing the model runtime (first compute job only, about 300 MB) into ${COMPUTE_DIR} …`);
+  const npm = npmCommand();
   return new Promise((resolve, reject) => {
     execFile(
-      npmBin(),
-      ["install", `@huggingface/transformers@${TRANSFORMERS_VERSION}`, "--no-audit", "--no-fund", "--omit=dev", "--loglevel=error"],
-      { cwd: COMPUTE_DIR, shell: process.platform === "win32", timeout: 15 * 60_000, windowsHide: true },
+      npm.file,
+      [...npm.args, "install", `@huggingface/transformers@${TRANSFORMERS_VERSION}`, "--no-audit", "--no-fund", "--omit=dev", "--loglevel=error"],
+      { cwd: COMPUTE_DIR, shell: npm.shell, timeout: 15 * 60_000, windowsHide: true },
       (err, _out, stderr) => (err ? reject(new Error(`npm install failed: ${String(stderr || err.message).slice(0, 300)}`)) : resolve()),
     );
   });

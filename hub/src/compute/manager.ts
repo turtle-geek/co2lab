@@ -67,6 +67,9 @@ const JOB_TIMEOUT_MS = 3 * 60_000;
 const MAX_ATTEMPTS = 3;
 const PAUSE_RETRY_MS = 5_000;
 const IDLE_RETRY_MS = 4_000;
+/** After this many failed batches in a row a device is paused for FAIL_BACKOFF_MS (e.g. its model install is broken). */
+const FAILS_BEFORE_BACKOFF = 2;
+const FAIL_BACKOFF_MS = 60_000;
 
 /** Rough active power by device kind (W at idle, at full load). Energy is an estimate and labeled so. */
 const WATTS: Record<DeviceKind, [number, number]> = { laptop: [3, 25], desktop: [15, 65], cloud: [1, 8], android: [1, 5] } as Record<DeviceKind, [number, number]>;
@@ -77,11 +80,15 @@ interface Job {
   deviceId: string | null;
   sentAt: number;
   attempt: number;
+  /** Devices this batch already failed on; a retry goes elsewhere first. */
+  failedOn: string[];
 }
 
 interface DeviceStats {
   view: ComputeDeviceView;
   paused: string | null;
+  failStreak: number;
+  failedUntil: number;
   kind: DeviceKind;
 }
 
@@ -156,7 +163,7 @@ export class ComputeManager {
         startedAt: null,
         finishedAt: null,
         reviews: { fetched: 0, kept: 0, dropped: { lowPlaytime: 0, free: 0, duplicate: 0, tooShort: 0 }, bombDays: [] },
-        batches: { total: 0, done: 0, inFlight: 0, retried: 0 },
+        batches: { total: 0, done: 0, inFlight: 0, retried: 0, dropped: 0, droppedReviews: 0 },
         sentences: 0,
         devices: [],
         decisions: [],
@@ -228,9 +235,16 @@ export class ComputeManager {
     this.release(d.rec.id);
     const st = this.stats(s, d);
     if (msg.type === "job.failed") {
+      st.failStreak++;
+      job.failedOn.push(d.rec.id);
       this.decide(s, d.rec.id, `${d.rec.name} could not run a batch: ${msg.reason}`);
+      if (st.failStreak >= FAILS_BEFORE_BACKOFF) {
+        st.failedUntil = Date.now() + FAIL_BACKOFF_MS;
+        this.decide(s, d.rec.id, `Paused ${d.rec.name} for ${FAIL_BACKOFF_MS / 1000} s: its last ${st.failStreak} batches failed`);
+      }
       this.requeue(s, job);
     } else {
+      st.failStreak = 0;
       for (const c of msg.counts) this.merge(s, c);
       s.view.batches.done++;
       s.view.sentences += msg.sentences;
@@ -270,7 +284,7 @@ export class ComputeManager {
       this.publish(s);
       return;
     }
-    const job = this.take(s, plan.batch);
+    const job = this.take(s, plan.batch, d.rec.id);
     if (!job) {
       st.view.state = "idle";
       this.deps.sendToDevice(d, { type: "job.none", retryMs: IDLE_RETRY_MS, reason: "all batches handed out" });
@@ -308,13 +322,14 @@ export class ComputeManager {
     const t = d.telemetry;
     const temp = t?.tempC ?? null;
     let pause: string | null = null;
-    if (t && t.batteryPct !== null && t.batteryPct < 20 && t.charging === false) pause = `battery ${t.batteryPct} % and unplugged`;
+    if (st.failedUntil > Date.now()) pause = `batches kept failing; retrying in ${Math.ceil((st.failedUntil - Date.now()) / 1000)} s`;
+    else if (t && t.batteryPct !== null && t.batteryPct < 20 && t.charging === false) pause = `battery ${t.batteryPct} % and unplugged`;
     else if (rule.pluggedInOnly && t && t.batteryPct !== null && t.charging === false) pause = "on battery (eco runs plugged-in only)";
     else if (temp !== null && temp >= rule.pauseAtC) pause = `${temp} °C ≥ ${rule.pauseAtC} °C`;
     else if (st.paused && temp !== null && temp >= rule.resumeBelowC && st.paused.includes("°C")) pause = `cooling down (${temp} °C, resumes below ${rule.resumeBelowC} °C)`;
 
     if (pause) {
-      if (!st.paused) this.decide(s, d.rec.id, `Paused ${d.rec.name}: ${pause}`);
+      if (!st.paused && st.failedUntil <= Date.now()) this.decide(s, d.rec.id, `Paused ${d.rec.name}: ${pause}`);
       st.paused = pause;
       return { pause };
     }
@@ -330,21 +345,27 @@ export class ComputeManager {
     return { batch, threads };
   }
 
-  private take(s: JobSet, size: number): Job | null {
-    const r = s.retry.shift();
-    if (r) return r;
-    if (s.cursor >= s.items.length) return null;
-    const items = s.items.slice(s.cursor, s.cursor + size);
-    s.cursor += items.length;
-    return { id: ulid(), items, deviceId: null, sentAt: 0, attempt: 1 };
+  /** A retried batch goes to a device that has not failed it yet, when one asks; else fresh work. */
+  private take(s: JobSet, size: number, deviceId: string): Job | null {
+    const i = s.retry.findIndex((j) => !j.failedOn.includes(deviceId));
+    if (i >= 0) return s.retry.splice(i, 1)[0]!;
+    if (s.cursor < s.items.length) {
+      const items = s.items.slice(s.cursor, s.cursor + size);
+      s.cursor += items.length;
+      return { id: ulid(), items, deviceId: null, sentAt: 0, attempt: 1, failedOn: [] };
+    }
+    // Only batches this device already failed are left: let it try again rather than stall.
+    return s.retry.shift() ?? null;
   }
 
   private requeue(s: JobSet, job: Job) {
     if (job.attempt >= MAX_ATTEMPTS) {
+      s.view.batches.dropped++;
+      s.view.batches.droppedReviews += job.items.length;
       this.decide(s, null, `Dropped a batch of ${job.items.length} reviews after ${MAX_ATTEMPTS} tries`);
       return;
     }
-    s.retry.push({ ...job, id: ulid(), deviceId: null, attempt: job.attempt + 1 });
+    s.retry.push({ ...job, id: ulid(), deviceId: null, attempt: job.attempt + 1, failedOn: [...job.failedOn] });
     s.view.batches.retried++;
   }
 
@@ -363,6 +384,8 @@ export class ComputeManager {
       st = {
         kind: d.rec.kind,
         paused: null,
+        failStreak: 0,
+        failedUntil: 0,
         view: { deviceId: d.rec.id, name: d.rec.name, state: "idle", batches: 0, sentences: 0, sentencesPerS: null, batchSize: 0, threads: 0, tempC: d.telemetry?.tempC ?? null, peakTempC: null, energyWh: 0 },
       };
       s.devices.set(d.rec.id, st);
@@ -390,10 +413,22 @@ export class ComputeManager {
   private checkDone(s: JobSet) {
     if (s.view.status !== "running") return;
     if (s.cursor < s.items.length || s.retry.length || s.inFlight.size) return;
-    s.view.status = "done";
     s.view.finishedAt = Date.now();
     const secs = ((s.view.finishedAt - (s.view.startedAt ?? s.view.finishedAt)) / 1000).toFixed(0);
-    this.decide(s, null, `Done: ${s.view.sentences} sentences in ${secs} s across ${s.devices.size} device(s)`);
+    const lost = s.view.batches.droppedReviews;
+    // Results built on less than 80 % of the kept reviews are not a valid answer.
+    if (lost > 0.2 * s.items.length) {
+      s.view.status = "failed";
+      s.view.error = `${lost} of ${s.items.length} reviews could not be analyzed (${s.view.batches.dropped} batches failed 3 times); see the decisions below`;
+      this.decide(s, null, `Failed: ${s.view.error}`);
+      return;
+    }
+    s.view.status = "done";
+    this.decide(
+      s,
+      null,
+      `Done: ${s.view.sentences} sentences in ${secs} s across ${s.devices.size} device(s)` + (lost ? ` (${lost} reviews in failed batches left out)` : ""),
+    );
   }
 
   // ---------- Health engine hooks ----------

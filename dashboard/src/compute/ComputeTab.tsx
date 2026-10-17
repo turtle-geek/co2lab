@@ -135,6 +135,7 @@ function SetView({ s, devices, now }: { s: ComputeSetView; devices: DeviceView[]
           <Stat label="Sentences" value={s.sentences.toLocaleString()} />
           <Stat label="Energy (est.)" value={`${s.energyWh.toFixed(3)} Wh`} />
           <Stat label="Retried" value={String(s.batches.retried)} />
+          {s.batches.dropped > 0 && <Stat label="Reviews not analyzed" value={String(s.batches.droppedReviews)} />}
         </div>
         <div className="bar" aria-label="progress">
           <div className="bar__fill" style={{ width: `${Math.round(done * 100)}%` }} />
