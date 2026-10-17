@@ -577,36 +577,29 @@ code {
   display: block;
 }
 .device__body > * {
-  fill: #f7eedd;
+  fill: #f8f1e3;
   stroke: #6f4b2e;
-  stroke-width: 4.5;
+  stroke-width: 3;
+  stroke-linejoin: round;
   transition: fill 0.4s ease, stroke 0.4s ease;
 }
-.device__body > .device__keys {
-  fill: #cdb594;
-  stroke: none;
-}
-.device__body > .device__cam,
-.device__body > .device__slot {
+.device__body > .device__detail {
   fill: #6f4b2e;
   stroke: none;
 }
-.device__body > .device__home {
-  fill: #e9dcc4;
-  stroke-width: 3;
+.device__body > .device__detail--soft {
+  fill: #d9c7aa;
 }
 .device__body > .device__led {
   fill: var(--green);
   stroke: none;
 }
+.device__cam {
+  fill: #6f4b2e;
+}
 .device__screen {
   fill: #dfeccf;
   transition: fill 0.5s ease;
-}
-.device__screen-edge {
-  fill: none;
-  stroke: #6f4b2e;
-  stroke-width: 3;
 }
 .device__glow {
   animation: glow 2.6s ease-in-out infinite;
@@ -614,12 +607,22 @@ code {
 .device--working .device__screen {
   fill: #e3f1d6;
 }
+/* offline: the whole device dims as one piece, screen off */
+.device--offline .device__body > * {
+  fill: #d6cfc1;
+  stroke: #5e4a39;
+}
+.device--offline .device__body > .device__detail {
+  fill: #5e4a39;
+}
+.device--offline .device__body > .device__detail--soft {
+  fill: #bfb4a2;
+}
 .device--offline .device__screen {
   fill: #66715f;
 }
-.device--offline .device__body > *:not(.device__keys):not(.device__cam):not(.device__slot):not(.device__led) {
-  fill: #d3cab9;
-  stroke: #5e4a39;
+.device--offline .device__cam {
+  fill: #4b5446;
 }
 .device--offline .tree__zzz {
   fill: #c3dbe9;
@@ -627,7 +630,7 @@ code {
 .device--offline .tree__zzz circle {
   fill: #a9b8ad;
 }
-.device--offline .device__led {
+.device--offline .device__body > .device__led {
   fill: #7d8577;
 }
 .device--resting .device__screen {
