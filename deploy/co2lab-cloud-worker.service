@@ -1,0 +1,16 @@
+[Unit]
+Description=CO2LAB cloud worker (headless web worker that takes over when the laptop sleeps)
+After=co2lab-hub.service
+Wants=co2lab-hub.service
+# only start once the worker has been paired
+ConditionPathExists=/opt/co2lab/worker-web/.device.json
+
+[Service]
+User=co2lab
+WorkingDirectory=/opt/co2lab/worker-web
+ExecStart=/usr/bin/npm start -- --cloud
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

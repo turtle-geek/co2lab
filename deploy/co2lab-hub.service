@@ -1,0 +1,15 @@
+[Unit]
+Description=CO2LAB hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=co2lab
+WorkingDirectory=/opt/co2lab/hub
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=2
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
