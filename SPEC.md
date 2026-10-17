@@ -69,7 +69,7 @@ Fallback rule: if an app fails live, its subtask shows "failed: <reason>" on the
 
 1. Owner opens dashboard → **Add device**. Hub creates a pairing code: 6 digits, single use, expires in 5 min. Dashboard shows the code and a QR of `co2lab://pair?hub=<url>&code=<code>`.
 2. Android: open Co2lab app → **Scan QR** (or type hub URL + code). Laptop: `npm run pair -- <code>` in `worker-web/` (hub URL from `.env`).
-3. Device sends `pair.request {code, name, kind, capabilities}`. Hub validates, creates `Device`, returns `pair.ok {deviceId, token}`. Hub stores only `sha256(token)`.
+3. Device calls `POST /api/pair {code, name, kind, capabilities}`. Hub validates, creates `Device`, returns `{deviceId, token}`. Hub stores only `sha256(token)`. The device then opens `/ws` with `hello {role: device, token}`.
 4. Device saves token (Android: EncryptedSharedPreferences; laptop: `worker-web/.device.json`, gitignored).
 5. New tree card appears. Android app then walks the user through enabling the Accessibility Service and a battery-optimization exemption.
 
@@ -179,8 +179,10 @@ Screenshots are stored on the hub disk (`hub/data/frames/`) and referenced by pa
 
 Endpoint `wss://<hub>/ws`. First message authenticates: `hello {role: device|owner|viewer, token}`.
 
-- Device → hub: `pair.request`, `heartbeat {telemetry}`, `frame {subtaskId?, jpegBase64}`, `step`, `subtask.result`, `subtask.failed`, `proxy.request {subtaskId, screenshot, nodes}`
-- Hub → device: `pair.ok|pair.error`, `subtask.assign {subtaskId, capability, config}`, `subtask.cancel`, `proxy.action`, `extract.done`
+HTTP: `POST /api/login`, `POST /api/logout`, `POST /api/pair`, `GET /api/health`. See `shared/PROTOCOL.md`.
+
+- Device → hub: `heartbeat {telemetry}`, `frame {subtaskId?, jpegBase64}`, `step`, `subtask.result {evidence: images/text}` (hub extracts deals with Gemini), `subtask.failed`, `proxy.request {subtaskId, screenshot, nodes}`
+- Hub → device: `hello.ok`, `subtask.assign {subtaskId, capability, goal, config}`, `subtask.cancel`, `proxy.action`, `error`
 - Owner → hub: `run.create`, `pair.start`, `device.revoke`, `viewer.create`, `research.*`, `approval.respond`
 - Hub → owner/viewer: `state.snapshot`, `device.update`, `frame`, `run.update`, `run.done`, `research.update`
 

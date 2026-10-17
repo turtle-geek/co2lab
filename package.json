@@ -1,0 +1,23 @@
+{
+  "name": "co2lab",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Old devices working together as an always-on agent team for in-app deals",
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "hub",
+    "dashboard",
+    "worker-web"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev": "npm run dev --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
