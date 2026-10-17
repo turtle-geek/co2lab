@@ -129,7 +129,13 @@ class AgentAccessibilityService : AccessibilityService() {
      */
     fun nodes(limit: Int = 300): List<Node> {
         val out = mutableListOf<Node>()
-        val root = rootInActiveWindow ?: return out
+        // The active window can be an empty splash or overlay; fall back to the top app window.
+        val root = rootInActiveWindow?.takeIf { it.childCount > 0 }
+            ?: windows.filter { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION }
+                .sortedByDescending { it.layer }
+                .firstNotNullOfOrNull { w -> w.root?.takeIf { it.childCount > 0 } }
+            ?: rootInActiveWindow
+            ?: return out
         fun walk(node: AccessibilityNodeInfo, id: String) {
             if (out.size >= limit) return
             if (!node.isVisibleToUser && id != "0") return

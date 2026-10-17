@@ -1,9 +1,9 @@
 {
-  "_help": "Per-app mapping and recipe. packages: known package names, tried first. labelMatch: if none is installed, any launchable app whose name contains one of these is used. signIn: visible texts that mean the app is signed out. dismiss: popup buttons the agent may tap. steps: taps from the app's start screen to the deals list; tap = texts or content descriptions to look for (exact match, case-insensitive, unless contains is true). deals.screens: how many screenshots to take while scrolling the list.",
+  "_help": "Per-app mapping and recipe. packages: known package names, tried first. labelMatch: if none is installed, any launchable app whose name contains one of these is used. signIn: visible texts that mean the app is signed out. dismiss: popup buttons the agent may tap. blockers: text that, when seen on the deals screen, fails the subtask with that reason (matched with contains). steps: taps from the app's start screen to the deals list; tap = texts or content descriptions to look for (exact match, case-insensitive, unless contains is true). deals.screens: how many screenshots to take while scrolling the list.",
   "apps": {
     "tims": {
       "label": "Tim Hortons",
-      "packages": ["digital.rbi.timhortons", "com.timhortons.android", "ca.timhortons.timhortons"],
+      "packages": ["digital.rbi.timhortons"],
       "labelMatch": ["tim hortons", "tims"],
       "report": true,
       "signIn": ["Sign in", "Sign In", "Log in", "Log In", "Sign up", "Create account", "Sign in or create account", "Continue with email"],
@@ -15,19 +15,23 @@
     },
     "mcdonalds": {
       "label": "McDonald's",
-      "packages": ["com.mcdonalds.mobileapp", "com.mcdonalds.app", "com.mcdonalds.ca"],
+      "packages": ["com.mcdonalds.superapp", "com.mcdonalds.mobileapp"],
       "labelMatch": ["mcdonald", "mcd"],
       "report": true,
       "signIn": ["Sign in", "Sign In", "Log in", "Log In", "Sign up", "Register", "Create account", "Join now"],
       "dismiss": ["Not now", "Not Now", "No thanks", "No Thanks", "Maybe later", "Maybe Later", "Skip", "Dismiss", "Got it", "Got It", "Later", "Close"],
       "steps": [
-        { "goal": "Open the Deals screen", "tap": ["Deals", "Offers", "Rewards & Deals", "MyMcDonald's Rewards"], "timeoutMs": 12000 }
+        { "goal": "Open Rewards & Offers", "tap": ["Rewards&Offers", "Rewards & Offers", "Deals"], "timeoutMs": 12000 },
+        { "goal": "Open the Offers tab", "tap": ["Offers"], "timeoutMs": 8000 }
+      ],
+      "blockers": [
+        { "text": "Turn on location services to see available offers", "reason": "McDonald's needs location to show offers: allow location for McDonald's on the phone" }
       ],
       "deals": { "screens": 5 }
     },
     "popeyes": {
       "label": "Popeyes",
-      "packages": ["digital.rbi.popeyes", "digital.rbi.popeyescanada", "com.popeyes.android", "com.popeyes.ca"],
+      "packages": ["com.emn8.mobilem8.nativeapp.plkca"],
       "labelMatch": ["popeyes"],
       "report": true,
       "signIn": ["Sign in", "Sign In", "Log in", "Log In", "Sign up", "Create account", "Sign in or create account", "Continue with email"],

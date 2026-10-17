@@ -25,7 +25,8 @@ object Pairing {
         var url = input.trim().trimEnd('/')
         if (url.endsWith("/ws")) url = url.removeSuffix("/ws")
         if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://$url"
-        return url
+        // Keep only scheme + host (+ port): people paste links like https://hub/pair or https://hub/apk.
+        return Regex("^(https?://[^/?#]+)").find(url)?.groupValues?.get(1) ?: url
     }
 
     fun pair(hubUrl: String, code: String, name: String, capabilities: List<String>): Paired {

@@ -13,6 +13,8 @@ import android.os.BatteryManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
+import android.net.wifi.WifiManager
 import android.util.Log
 import ca.co2lab.agent.protocol.Assign
 import ca.co2lab.agent.protocol.Msg
@@ -73,7 +75,28 @@ class AgentService : Service(), SubtaskRunner.Link {
     private val probeWorker = Executors.newSingleThreadExecutor()
     private var probeStreaming = false
 
+    // The phone lives on a charger: keep the CPU and Wi-Fi awake so heartbeats never stall with the screen off.
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
+
+    @Suppress("DEPRECATION")
+    private fun holdLocks() {
+        if (wakeLock?.isHeld != true) {
+            wakeLock = getSystemService(PowerManager::class.java)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "co2lab:agent").apply { setReferenceCounted(false); acquire() }
+        }
+        if (wifiLock?.isHeld != true) {
+            wifiLock = (applicationContext.getSystemService(WIFI_SERVICE) as WifiManager)
+                .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "co2lab:agent").apply { setReferenceCounted(false); acquire() }
+        }
+    }
+
+    private fun releaseLocks() {
+        wakeLock?.takeIf { it.isHeld }?.release()
+        wifiLock?.takeIf { it.isHeld }?.release()
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -88,6 +111,7 @@ class AgentService : Service(), SubtaskRunner.Link {
             return START_NOT_STICKY
         }
         stopped = false
+        holdLocks()
         AgentStatus.update { it.copy(authFailed = false) }
         connect()
         return START_STICKY
@@ -95,6 +119,7 @@ class AgentService : Service(), SubtaskRunner.Link {
 
     override fun onDestroy() {
         stopped = true
+        releaseLocks()
         main.removeCallbacksAndMessages(null)
         socket?.close(1000, "service stopped")
         socket = null

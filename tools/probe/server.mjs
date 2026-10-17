@@ -72,12 +72,17 @@ function hubUrl(req) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
-  const route = `${req.method} ${url.pathname}`;
+  // Accept /api/pair and /api/health under any prefix (e.g. a hub address typed with a path).
+  const pathname = url.pathname.replace(/^.*(\/api\/(pair|health))$/, "$1");
+  const route = `${req.method} ${pathname}`;
   // Requests through the cloudflared tunnel carry cf-connecting-ip. Only the phone's routes are
   // reachable that way; everything that controls the phone or shows its screen is localhost-only.
   const viaTunnel = !!req.headers["cf-connecting-ip"] || !!req.headers["x-forwarded-for"];
   const PUBLIC = new Set(["GET /apk", "POST /api/pair", "GET /health", "GET /api/health"]);
-  if (viaTunnel && !PUBLIC.has(route)) return send(res, 403, "localhost only");
+  if (viaTunnel && !PUBLIC.has(route)) {
+    log("403 via tunnel:", req.method, req.url);
+    return send(res, 403, "localhost only");
+  }
   try {
     switch (route) {
       case "GET /health":

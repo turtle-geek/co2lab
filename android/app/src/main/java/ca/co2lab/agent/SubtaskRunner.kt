@@ -204,6 +204,12 @@ class SubtaskRunner(private val context: Context, private val link: Link) {
         throw Failure("${app.label} shows a sign-in screen (\"${hit.label()}\") on ${link.deviceName()}: sign in on the phone first")
     }
 
+    private fun checkBlockers(app: AppCatalog.App, nodes: List<AgentAccessibilityService.Node>) {
+        for ((text, reason) in app.blockers) {
+            if (a11y().find(nodes, listOf(text), contains = true) != null) throw Failure("$reason (${link.deviceName()})")
+        }
+    }
+
     // ---------- Capture ----------
 
     private fun capture(a: Assign, app: AppCatalog.App, pkg: String): Pair<List<String>, String?> {
@@ -215,7 +221,10 @@ class SubtaskRunner(private val context: Context, private val link: Link) {
         for (i in 0 until screens) {
             check(a)
             val nodes = svc.nodes()
-            if (i == 0) checkSignIn(app, nodes)
+            if (i == 0) {
+                checkSignIn(app, nodes)
+                checkBlockers(app, nodes)
+            }
             val signature = nodes.joinToString("|") { it.label() }
             if (i > 0 && signature == lastSignature) {
                 step(a, "screenshot", "Reached the end of the list")
@@ -292,7 +301,7 @@ class SubtaskRunner(private val context: Context, private val link: Link) {
                 is ProxyAction.Wait -> sleep(a, action.ms)
             }
             sleep(a, 1_500)
-            if (svc.currentPackage() != pkg && action !is ProxyAction.Back) {
+            if (svc.currentPackage() != pkg) {
                 // The hub left the app (e.g. a link opened a browser); bring it back.
                 history += "(left ${app.label}, reopened it)"
                 svc.launchFresh(pkg)

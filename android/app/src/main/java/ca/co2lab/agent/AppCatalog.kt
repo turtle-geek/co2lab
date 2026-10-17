@@ -25,6 +25,8 @@ class AppCatalog(private val context: Context) {
         val dismiss: List<String>,
         val steps: List<Step>,
         val screens: Int,
+        /** Visible text (contains match) -> failure reason, e.g. a missing permission. */
+        val blockers: List<Pair<String, String>>,
     )
 
     data class Launchable(val packageName: String, val label: String)
@@ -66,6 +68,9 @@ class AppCatalog(private val context: Context) {
                     )
                 },
                 screens = a.optJSONObject("deals")?.optInt("screens", 5) ?: 5,
+                blockers = a.optJSONArray("blockers")?.let { b ->
+                    (0 until b.length()).map { b.getJSONObject(it) }.map { it.optString("text") to it.optString("reason") }
+                }.orEmpty().filter { it.first.isNotBlank() },
             )
         }
         return out
