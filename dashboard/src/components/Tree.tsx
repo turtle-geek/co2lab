@@ -108,7 +108,10 @@ function Mouth({ mood }: { mood: DeviceState }) {
   }
 }
 
-/** Soft, slightly uneven crown. Each mood gets its own silhouette; none is a perfect circle. */
+/**
+ * Soft, slightly uneven crown. Each mood gets its own silhouette; none is a perfect circle.
+ * Every path has the same commands (M + 6 C + Z) so CSS can morph between moods.
+ */
 const CROWN: Record<DeviceState, string> = {
   // awake: soft rounded blob with slightly squared sides, like the hand-drawn mock
   idle: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
@@ -138,8 +141,8 @@ type Placement = { x: number; y: number; width: number; height: number };
  */
 export function Tree({ mood, placement }: { mood: DeviceState; placement?: Placement }) {
   const cheeks = CHEEKS[mood];
-  const cheekRx = mood === "hot" ? 11 : 9;
-  const cheekRy = mood === "hot" ? 8.5 : 7.8;
+  const cheekRx = mood === "hot" ? 12.5 : 11.5;
+  const cheekRy = mood === "hot" ? 8.5 : 8;
   return (
     <svg
       className={`${placement ? "tree-embedded" : "tree"} tree--${mood}`}
@@ -152,7 +155,7 @@ export function Tree({ mood, placement }: { mood: DeviceState; placement?: Place
       <path className="tree__trunk" d={TRUNK} />
       <g className="tree__crown">
         <g className="tree__crown-shape-group">
-          <path className="tree__crown-shape" d={CROWN[mood]} />
+          <path className="tree__crown-shape" style={{ d: `path("${CROWN[mood]}")` }} />
           {mood === "resting" && (
             <>
               <ellipse cx="50" cy="126" rx="9" ry="16" transform="rotate(18 50 126)" className="tree__leaf" />
@@ -163,8 +166,8 @@ export function Tree({ mood, placement }: { mood: DeviceState; placement?: Place
         <g className="tree__face">
           {cheeks && (
             <g className="tree__cheeks">
-              <ellipse cx={100 - cheeks.dx} cy={cheeks.y} rx={cheekRx} ry={cheekRy} />
-              <ellipse cx={100 + cheeks.dx} cy={cheeks.y} rx={cheekRx} ry={cheekRy} />
+              <ellipse style={{ cx: 100 - cheeks.dx, cy: cheeks.y, rx: cheekRx, ry: cheekRy }} />
+              <ellipse style={{ cx: 100 + cheeks.dx, cy: cheeks.y, rx: cheekRx, ry: cheekRy }} />
             </g>
           )}
           <Eyes mood={mood} />
@@ -177,12 +180,12 @@ export function Tree({ mood, placement }: { mood: DeviceState; placement?: Place
       )}
       {mood === "offline" && (
         <g className="tree__zzz">
-          <text x="132" y="44" fontSize="18">z</text>
-          <text x="146" y="30" fontSize="24">z</text>
-          <text x="164" y="16" fontSize="30">Z</text>
-          <circle cx="160" cy="64" r="5" />
-          <circle cx="152" cy="80" r="3.5" />
-          <circle cx="166" cy="78" r="2.5" />
+          <text x="140" y="44" fontSize="16">z</text>
+          <text x="151" y="34" fontSize="21">z</text>
+          <text x="164" y="24" fontSize="27">Z</text>
+          <circle cx="166" cy="70" r="4.5" />
+          <circle cx="174" cy="82" r="3" />
+          <circle cx="168" cy="92" r="2.2" />
         </g>
       )}
       {mood === "hot" && (

@@ -28,11 +28,12 @@ const LAYOUT: Record<DeviceKind, { screen: Rect; tree: Box }> = {
 function Laptop() {
   return (
     <g className="device__body">
-      {/* lid */}
-      <rect x="32" y="12" width="176" height="140" rx="11" />
-      {/* base: one slim slab, slightly wider than the lid, with a thumb notch */}
-      <path d="M22 152 H218 A8 8 0 0 1 226 160 V161 A9 9 0 0 1 217 170 H23 A9 9 0 0 1 14 161 V160 A8 8 0 0 1 22 152 Z" />
-      <rect className="device__detail" x="102" y="152" width="36" height="5" rx="2.5" />
+      {/* keyboard deck: a trapezoid whose top edge is exactly the lid's bottom edge */}
+      <path d="M32 152 H208 L225 177 A5.5 5.5 0 0 1 220.5 185 H19.5 A5.5 5.5 0 0 1 15 177 Z" />
+      <path className="device__detail device__detail--soft" d="M50 158 H190 L198 169 H42 Z" />
+      <rect className="device__detail device__detail--soft" x="103" y="173" width="34" height="6" rx="3" />
+      {/* lid: rounded on top, square at the hinge so it meets the deck in one line */}
+      <path d="M43 12 H197 A11 11 0 0 1 208 23 V152 H32 V23 A11 11 0 0 1 43 12 Z" />
     </g>
   );
 }
@@ -62,12 +63,8 @@ function Server() {
 
 export function DeviceScene({ kind, mood }: { kind: DeviceKind; mood: DeviceState }) {
   const id = useId().replace(/:/g, "");
-  const { screen, tree: awake } = LAYOUT[kind];
-  // Asleep, the tree shrinks and sinks a little on the screen so its zzz stays visible.
-  const tree =
-    mood === "offline"
-      ? { x: awake.x + awake.width * 0.05, y: awake.y + awake.height * 0.07, width: awake.width * 0.9, height: awake.height * 0.9 }
-      : awake;
+  // The tree keeps the same spot in every mood so the trunk never jumps; only the crown morphs.
+  const { screen, tree } = LAYOUT[kind];
   const clip = `screen-${id}`;
   const glow = `glow-${id}`;
   return (

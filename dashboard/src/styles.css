@@ -577,7 +577,7 @@ code {
   display: block;
 }
 .device__body > * {
-  fill: #f8f1e3;
+  fill: #e9d6b6;
   stroke: #6f4b2e;
   stroke-width: 3;
   stroke-linejoin: round;
@@ -588,7 +588,7 @@ code {
   stroke: none;
 }
 .device__body > .device__detail--soft {
-  fill: #d9c7aa;
+  fill: #cfb68f;
 }
 .device__body > .device__led {
   fill: var(--green);
@@ -609,14 +609,14 @@ code {
 }
 /* offline: the whole device dims as one piece, screen off */
 .device--offline .device__body > * {
-  fill: #d6cfc1;
+  fill: #bfb4a1;
   stroke: #5e4a39;
 }
 .device--offline .device__body > .device__detail {
   fill: #5e4a39;
 }
 .device--offline .device__body > .device__detail--soft {
-  fill: #bfb4a2;
+  fill: #a69a86;
 }
 .device--offline .device__screen {
   fill: #66715f;
@@ -672,11 +672,13 @@ code {
 .tree__crown-shape,
 .tree__leaf {
   fill: var(--green);
-  transition: fill 0.4s ease;
+  transition: fill 0.5s ease, d 0.7s cubic-bezier(0.45, 0, 0.25, 1);
 }
 .tree__cheeks ellipse {
   fill: var(--cheek);
   opacity: 0.85;
+  transition: fill 0.5s ease, cx 0.7s cubic-bezier(0.45, 0, 0.25, 1), cy 0.7s cubic-bezier(0.45, 0, 0.25, 1),
+    rx 0.7s ease, ry 0.7s ease;
 }
 .tree__crown {
   transform-box: fill-box;
