@@ -9,12 +9,15 @@ create extension if not exists timescaledb;
 create table if not exists device (
   id           text primary key,
   name         text not null,
-  kind         text not null check (kind in ('android', 'laptop', 'cloud')),
+  kind         text not null,
   capabilities text[] not null default '{}',
   token_hash   text not null,
   created_at   timestamptz not null,
   revoked_at   timestamptz
 );
+-- Re-created on every start so new device kinds (e.g. desktop) reach existing databases.
+alter table device drop constraint if exists device_kind_check;
+alter table device add constraint device_kind_check check (kind in ('android', 'laptop', 'desktop', 'cloud'));
 
 create table if not exists viewer_link (
   token_hash text primary key,
