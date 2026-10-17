@@ -6,6 +6,7 @@ import type { ContextItem, DeviceKind, ProxyAction, RunAnswer, UiNode } from "@c
 import { ProxyAction as ProxyActionSchema } from "@co2lab/shared";
 import { z } from "zod";
 import { callJson, PLAN_IDS, type PlanId, type UsageSink } from "../gemini.js";
+import { log } from "../log.js";
 
 export interface CatalogDevice {
   id: string;
@@ -79,8 +80,8 @@ export async function planRequest(o: {
   onUsage: UsageSink;
 }): Promise<Plan> {
   const followUp = o.findings !== undefined;
-  return callJson({
-    tier: "flash",
+  return withFallback({
+    tier: "flash" as const,
     label: followUp ? "agent follow-up" : "agent planner",
     schema: PlanSchema,
     onUsage: o.onUsage,
@@ -121,8 +122,8 @@ const FindingsSchema = z.object({
 export type Findings = z.infer<typeof FindingsSchema>;
 
 export async function extractFindings(o: { goal: string; text: string; images: string[]; onUsage: UsageSink }): Promise<Findings> {
-  return callJson({
-    tier: "flash",
+  return withFallback({
+    tier: "flash" as const,
     label: "findings",
     schema: FindingsSchema,
     onUsage: o.onUsage,
@@ -159,8 +160,8 @@ export async function chooseWebAction(o: {
   onUsage: UsageSink;
 }): Promise<{ action: ProxyAction; why: string }> {
   const nodes = o.nodes.map((n) => `${n.id} | ${n.viewId ?? ""} | ${n.text ?? ""} | ${n.desc ?? ""}`).join("\n");
-  const r = await callJson({
-    tier: "flash",
+  const r = await withFallback({
+    tier: "flash" as const,
     label: "web agent",
     schema: WebActionSchema,
     onUsage: o.onUsage,
@@ -227,8 +228,8 @@ const AnswerSchema = z.object({
 });
 
 export async function composeAnswer(o: { prompt: string; sections: AnswerSection[]; onUsage: UsageSink }): Promise<RunAnswer> {
-  const r = await callJson({
-    tier: "flash",
+  const r = await withFallback({
+    tier: "flash" as const,
     label: "answer",
     schema: AnswerSchema,
     onUsage: o.onUsage,
@@ -251,4 +252,18 @@ export async function composeAnswer(o: { prompt: string; sections: AnswerSection
       return { title: it.title, detail: it.detail, source: s?.source ?? "?", deviceId: s?.deviceId ?? null, url: it.url };
     }),
   };
+}
+
+/**
+ * Flash first; if it is overloaded or errors after its retries (e.g. Gemini 503 "high demand"),
+ * the same call once more on the Lite model, so a busy model does not end the whole run.
+ */
+async function withFallback<S extends z.ZodType>(opts: Parameters<typeof callJson<S>>[0]): Promise<z.infer<S>> {
+  try {
+    return await callJson(opts);
+  } catch (e) {
+    if (opts.tier === "lite") throw e;
+    log.warn(`gemini ${opts.label}: ${(e as Error).message.slice(0, 120)}; trying the lite model`);
+    return callJson({ ...opts, tier: "lite", label: `${opts.label} (lite)` });
+  }
 }
