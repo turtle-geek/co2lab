@@ -171,7 +171,31 @@ export const ApprovalView = z.object({
 });
 export type ApprovalView = z.infer<typeof ApprovalView>;
 
-/** Research Mode. T7 may extend these through this file and SPEC.md. */
+/** Research Mode (T7, SPEC §4.5). */
+export const FeedbackKind = z.enum(["flag", "approve", "redirect"]);
+
+/** One specific difference between a trial's extraction and the owner's ground truth. */
+export const Misread = z.object({
+  kind: z.enum(["price", "missed", "extra"]),
+  app: z.string(),
+  /** Ground-truth title (price/missed) or extracted title (extra). */
+  title: z.string(),
+  expected: z.string().nullable(),
+  got: z.string().nullable(),
+});
+export type Misread = z.infer<typeof Misread>;
+
+/** Something the research agent read through the Papiers CLI and cites in its hypothesis. */
+export const PapiersCitation = z.object({
+  ref: z.string(),
+  title: z.string().nullable(),
+  /** Text the hub actually read from Papiers for this ref. */
+  excerpt: z.string(),
+  /** Why the agent cites it. */
+  use: z.string(),
+});
+export type PapiersCitation = z.infer<typeof PapiersCitation>;
+
 export const ExperimentView = z.object({
   id: z.string(),
   parentId: z.string().nullable(),
@@ -188,17 +212,78 @@ export const ExperimentView = z.object({
       tokens: z.number().int(),
       latencyMs: z.number().int(),
       costUsd: z.number(),
+      misreads: z.array(Misread).optional(),
+      error: z.string().nullable().optional(),
     }),
   ),
   analysis: z.string().nullable(),
   nextProposal: z.string().nullable(),
-  feedback: z.array(
-    z.object({ id: z.string(), kind: z.enum(["flag", "approve", "redirect"]), text: z.string(), createdAt: z.number() }),
-  ),
+  feedback: z.array(z.object({ id: z.string(), kind: FeedbackKind, text: z.string(), createdAt: z.number() })),
   citesFeedbackIds: z.array(z.string()),
   findingRef: z.string().nullable(),
+  title: z.string().optional(),
+  createdAt: z.number().optional(),
+  papiers: z.array(PapiersCitation).optional(),
+  /** Why Papiers context is missing, when the CLI failed. */
+  papiersError: z.string().nullable().optional(),
+  captureIds: z.array(z.string()).optional(),
+  /** Set when the agent or a trial run failed; shown as-is. */
+  error: z.string().nullable().optional(),
+  /** Id of the experiment that replaced this proposal after a redirect. */
+  supersededBy: z.string().nullable().optional(),
 });
 export type ExperimentView = z.infer<typeof ExperimentView>;
+
+/** Owner's verdict on one deal while labeling ground truth. */
+export const LabelItem = z.object({
+  verdict: z.enum(["correct", "wrong", "missing"]),
+  title: z.string(),
+  priceText: z.string().nullable(),
+  /** For "wrong": what the app really shows (null = the deal does not exist). */
+  correctTitle: z.string().nullable().optional(),
+  correctPrice: z.string().nullable().optional(),
+});
+export type LabelItem = z.infer<typeof LabelItem>;
+
+/** GET /api/research: captures and findings (experiments also arrive by WebSocket). */
+export const CaptureView = z.object({
+  id: z.string(),
+  app: AppId,
+  createdAt: z.number(),
+  status: z.enum(["capturing", "ready", "failed"]),
+  error: z.string().nullable(),
+  runId: z.string().nullable(),
+  deviceName: z.string().nullable(),
+  /** Hub evidence refs ("frames/<file>.jpg"). */
+  frames: z.array(z.string()),
+  hasText: z.boolean(),
+  /** Deals the live run extracted (default config); the starting point for labeling. */
+  candidates: z.array(Deal),
+  groundTruth: z
+    .object({ deals: z.array(Deal), labels: z.array(LabelItem), labeledAt: z.number() })
+    .nullable(),
+});
+export type CaptureView = z.infer<typeof CaptureView>;
+
+export const FindingView = z.object({
+  id: z.string(),
+  experimentId: z.string(),
+  summary: z.string(),
+  papiersRef: z.string().nullable(),
+  createdAt: z.number(),
+});
+export type FindingView = z.infer<typeof FindingView>;
+
+export const ResearchState = z.object({
+  captures: z.array(CaptureView),
+  findings: z.array(FindingView),
+  /** What the research agent is doing right now, if anything. */
+  busy: z.string().nullable(),
+  /** Model ids behind each tier on this hub (the free tier maps pro to the flash model). */
+  models: z.record(z.string(), z.string()),
+  store: z.string(),
+});
+export type ResearchState = z.infer<typeof ResearchState>;
 
 // ---------- Handshake (first message on every socket) ----------
 
@@ -279,7 +364,14 @@ export const ClientToHub = z.discriminatedUnion("type", [
   z.object({ type: z.literal("approval.respond"), approvalId: z.string(), approve: z.boolean() }),
   // Research Mode
   z.object({ type: z.literal("research.capture"), app: AppId }),
-  z.object({ type: z.literal("research.label"), captureId: z.string(), deals: z.array(Deal) }),
+  z.object({
+    type: z.literal("research.label"),
+    captureId: z.string(),
+    /** Ground truth: the deals the app really shows. */
+    deals: z.array(Deal),
+    /** The owner's per-deal verdicts that produced `deals` (kept for the record). */
+    labels: z.array(LabelItem).optional(),
+  }),
   z.object({ type: z.literal("research.propose") }),
   z.object({
     type: z.literal("research.feedback"),

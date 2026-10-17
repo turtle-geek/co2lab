@@ -168,3 +168,30 @@ create table if not exists finding (
   papiers_ref   text,
   created_at    timestamptz not null default now()
 );
+
+-- T7 detail columns (hub/src/db/research-pg.ts). Added with "if not exists" so older databases upgrade in place.
+alter table capture add column if not exists status text not null default 'ready';
+alter table capture add column if not exists error text;
+alter table capture add column if not exists run_id text;
+alter table capture add column if not exists subtask_id text;
+alter table capture add column if not exists device_name text;
+alter table capture add column if not exists evidence_text text;
+alter table capture add column if not exists candidates jsonb not null default '[]';
+
+alter table ground_truth add column if not exists labels jsonb not null default '[]';
+
+alter table experiment add column if not exists title text;
+alter table experiment add column if not exists configs jsonb not null default '[]';
+alter table experiment add column if not exists capture_ids text[] not null default '{}';
+alter table experiment add column if not exists papiers jsonb not null default '[]';
+alter table experiment add column if not exists papiers_error text;
+alter table experiment add column if not exists analysis text;
+alter table experiment add column if not exists next_proposal text;
+alter table experiment add column if not exists error text;
+
+alter table trial add column if not exists config jsonb;
+alter table trial add column if not exists deals jsonb;
+alter table trial add column if not exists misreads jsonb not null default '[]';
+alter table trial add column if not exists error text;
+
+alter table finding add column if not exists markdown text;

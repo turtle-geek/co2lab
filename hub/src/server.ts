@@ -81,6 +81,22 @@ app.get("/api/evidence/:file", async (req: FastifyRequest<{ Params: { file: stri
   }
 });
 
+// ---------- Research Mode (Lab tab) ----------
+
+type ViewerQuery = FastifyRequest<{ Querystring: { viewer?: string } }>;
+app.get("/api/research", async (req: ViewerQuery, reply) => {
+  if (!isOwner(req) && !(await hub.viewerTokenValid(req.query.viewer))) return reply.code(401).send({ error: "unauthorized" });
+  return hub.research.state();
+});
+
+app.get("/api/research/findings/:id", async (req: FastifyRequest<{ Params: { id: string }; Querystring: { viewer?: string } }>, reply) => {
+  if (!isOwner(req) && !(await hub.viewerTokenValid(req.query.viewer))) return reply.code(401).send({ error: "unauthorized" });
+  const id = req.params.id.replace(/\.md$/, "");
+  const md = hub.research.findingMarkdown(id);
+  if (md === null) return reply.code(404).send({ error: "not_found" });
+  return reply.type("text/markdown; charset=utf-8").header("content-disposition", `attachment; filename="finding-${id}.md"`).send(md);
+});
+
 // ---------- Dashboard ----------
 
 const hasDashboard = existsSync(join(config.dashboardDist, "index.html"));

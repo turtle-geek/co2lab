@@ -20,6 +20,7 @@ import { DeviceRegistry, type LiveDevice } from "./devices.js";
 import { log } from "./log.js";
 import { Pairing, type RedeemError } from "./pairing.js";
 import type { Repository } from "./repo/index.js";
+import { ResearchLab, UserError, researchStoreFor } from "./research/index.js";
 import { DEFAULT_CONFIG, RunManager } from "./runs.js";
 
 const HELLO_TIMEOUT_MS = 5_000;
@@ -37,6 +38,7 @@ interface ClientConn {
 export class Hub {
   readonly devices: DeviceRegistry;
   readonly runs: RunManager;
+  readonly research: ResearchLab;
   readonly pairing = new Pairing();
   private clients = new Set<ClientConn>();
   private wss = new WebSocketServer({ noServer: true, maxPayload: MAX_WS_PAYLOAD });
@@ -50,12 +52,21 @@ export class Hub {
       broadcast: (m) => this.broadcast(m),
       sendToDevice: (d, m) => this.sendToDevice(d, m),
       deviceChanged: (d) => this.publishDevice(d),
+      onEvidence: (...a) => this.research.onEvidence(...a),
+    });
+    this.research = new ResearchLab({
+      store: researchStoreFor(repo),
+      repo,
+      runs: this.runs,
+      broadcast: (m) => this.broadcast(m),
+      deviceName: (id) => this.devices.get(id)?.rec.name ?? null,
     });
   }
 
   async start() {
     await this.devices.load();
     await this.runs.load();
+    await this.research.load();
     this.timers.push(setInterval(() => this.tick(), 500));
     this.timers.push(setInterval(() => this.ping(), PING_MS));
   }
@@ -68,6 +79,7 @@ export class Hub {
   // ---------- Outbound ----------
 
   broadcast(msg: HubToClient) {
+    if (msg.type === "run.update") this.research?.onRunUpdate(msg.run);
     const data = JSON.stringify(msg);
     const now = Date.now();
     for (const c of this.clients) {
@@ -100,7 +112,7 @@ export class Hub {
       devices: this.devices.active().map((d) => this.devices.view(d)),
       runs: this.runs.recentViews(),
       approvals: [],
-      experiments: [],
+      experiments: this.research.views(),
       defaultConfig: DEFAULT_CONFIG,
     };
   }
@@ -338,6 +350,17 @@ export class Hub {
         this.sendRaw(ws, { type: "viewer.link", ...link });
         return;
       }
+      case "research.capture":
+      case "research.label":
+      case "research.propose":
+      case "research.feedback":
+        try {
+          await this.research.handle(msg);
+        } catch (e) {
+          if (!(e instanceof UserError)) throw e;
+          this.sendRaw(ws, { type: "error", code: "research", message: e.message });
+        }
+        return;
       default:
         this.sendRaw(ws, { type: "error", code: "not_implemented", message: `${msg.type} is not available yet` });
     }

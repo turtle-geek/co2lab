@@ -81,7 +81,7 @@ function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function callJson<S extends z.ZodType>(opts: {
+export async function callJson<S extends z.ZodType>(opts: {
   tier: ModelTier;
   label: string;
   system: string;

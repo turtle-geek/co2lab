@@ -77,6 +77,8 @@ export interface RunDeps {
   broadcast: (msg: HubToClient) => void;
   sendToDevice: (d: LiveDevice, msg: HubToDevice) => void;
   deviceChanged: (d: LiveDevice) => void;
+  /** Research Mode keeps the screenshots and screen text of capture runs (hub/src/research/). */
+  onEvidence?: (subtaskId: string, deviceId: string | null, refs: (string | null)[], text: string | null) => void;
 }
 
 export class RunManager {
@@ -255,7 +257,36 @@ export class RunManager {
       model: null,
     });
     if (chosen.length === 0) return this.failRun(run, "planner chose no sources for this request");
+    this.startSubtasks(run, chosen, planNote);
+  }
 
+  /** A run with fixed sources and config, no planner (Research Mode live captures). */
+  async createFixed(prompt: string, ids: PlanId[], cfg: AgentConfig): Promise<RunView> {
+    const run: RunRecord = {
+      id: ulid(),
+      clientRunId: `fixed-${ulid()}`,
+      prompt,
+      status: "planning",
+      config: { ...cfg },
+      ranked: null,
+      burn: emptyBurn(),
+      error: null,
+      createdAt: Date.now(),
+      finishedAt: null,
+    };
+    this.runs.set(run.id, run);
+    this.byRun.set(run.id, []);
+    this.byClientRunId.set(run.clientRunId, run.id);
+    this.saveRun(run);
+    this.startSubtasks(
+      run,
+      ids.map((id) => ({ id, goal: PLAN_INFO[id].goal })),
+      "fixed",
+    );
+    return this.view(run.id);
+  }
+
+  private startSubtasks(run: RunRecord, chosen: { id: PlanId; goal: string }[], planNote: string) {
     const now = Date.now();
     for (const c of chosen) {
       const info = PLAN_INFO[c.id];
@@ -496,6 +527,7 @@ export class RunManager {
       return this.finishSubtask(s, "failed", "device sent no evidence (no screenshots or text)");
 
     const refs = await this.saveImages(s, evidence.images);
+    this.deps.onEvidence?.(s.id, s.deviceId, refs, evidence.text);
     this.hubStep(s, "extract", `Reading ${s.label} deals with Gemini…`);
     let deals: Deal[];
     try {
