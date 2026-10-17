@@ -1,7 +1,7 @@
 # Co2lab — SPEC
 
 > Source of truth. Read before building. Update it when a decision changes.
-> Last updated: 2026-10-16 (after `/interview`).
+> Last updated: 2026-10-17 (live run on Vultr verified; Papiers is read-only).
 
 ## 1. One-line pitch
 
@@ -111,9 +111,9 @@ Loop:
 4. **Evaluation**: accuracy vs. ground truth (precision/recall on deals, exact price match), tokens, latency, estimated cost.
 5. **Analysis + next step** (research agent): explains results with a table and the specific misreads, and proposes the next experiment.
 6. **Human review**: owner can **flag** a result ("it read $1 as $7 — that's a failure, not a pass"), **approve** the proposal, or **redirect** ("test 75 % scale instead"). The agent's next hypothesis must cite the feedback.
-7. **Finding** saved to Papiers via CLI and shown in the Lab notebook.
+7. **Finding** saved in the Lab notebook (Tiger Data), with an export to Markdown. The Papiers CLI is read-only, so Papiers supplies context (step 1), not storage.
 
-Done for the demo when: at least one full cycle has run, a human flag or redirect visibly changed the next experiment, and a finding is saved to Papiers.
+Done for the demo when: at least one full cycle has run, a human flag or redirect visibly changed the next experiment, the hypothesis cites something read from Papiers, and the finding is saved in the Lab notebook.
 
 ### 4.6 WhatsApp share (N1)
 
@@ -164,10 +164,10 @@ Screenshots are stored on the hub disk (`hub/data/frames/`) and referenced by pa
 
 | Service | Used for | Key / account | Status |
 |---|---|---|---|
-| Gemini API | Planner, extraction, agent proxy fallback, merge, research agent | `GEMINI_API_KEY` | **Unconfirmed — owner to confirm** |
-| Vultr | Hub + Cloud worker VPS | account | **To create** |
-| Tiger Data | Postgres/Timescale | `DATABASE_URL` | **To create** |
-| Papiers | Read context, save findings (CLI) | Papiers account + CLI auth | **To create; read https://papiers.ai/docs** |
+| Gemini API | Planner, extraction, agent proxy fallback, merge, research agent | `GEMINI_API_KEY` | Working. Free tier: Flash and Lite only, so the Pro slot uses Flash |
+| Vultr | Hub + Cloud worker VPS | account | Live: `vc2-1c-2gb`, Toronto, https://149-248-58-164.sslip.io |
+| Tiger Data | Postgres/Timescale | `DATABASE_URL` + `DATABASE_PASSWORD` | Connected (TimescaleDB 2.30). TLS: trust `db/timescale-ca.pem` |
+| Papiers | Read research context from the owner's library (CLI `papiers search/read`) | `PAPIERS_TOKEN` | Connected. **CLI is read-only**: findings are stored in the Lab notebook (Tiger Data) and exported as Markdown |
 | GoDaddy | Domain for the hub | DNS A record | Optional (fallback sslip.io) |
 | Tim Hortons, McDonald's, Popeyes apps | Deal sources | Owner's own accounts, signed in on A54 | Owner |
 | RedFlagDeals | Web deal source (read-only, low rate) | none | — |
@@ -265,8 +265,12 @@ Parallel sessions: T1, T2, T3, T4 can run at the same time after T0 because they
 
 ## 11. Open questions
 
-1. **Gemini API key** — does the owner already have one with enough quota?
-2. **Accounts** — Vultr, Tiger Data, Papiers to be created (owner, now).
-3. **Domain** — use the GoDaddy domain from the diagram, or sslip.io?
-4. **Papiers CLI** — exact install/auth/commands; read https://papiers.ai/docs during T7.
-5. **App package names and deal-screen paths** — answered by T8.
+1. Custom domain instead of `149-248-58-164.sslip.io` (optional; set `HUB_DOMAIN`, add a DNS A record, run `deploy/deploy.sh --env`).
+
+Resolved: Gemini key and models; Vultr, Tiger Data and Papiers accounts; app package names and recipe paths (`docs/app-spike.md`); Papiers CLI (read-only, `PAPIERS_TOKEN`).
+
+## 12. Status (2026-10-17)
+
+- Done and verified live: T0, T1, T2, T3, T4, T5, T8. Full hunt on the Vultr hub: A54 read Tim Hortons, McDonald's and Popeyes in their apps, the laptop read RedFlagDeals, the laptop was cut off mid-run, and the Cloud worker finished its job within about 6 s; merged ranking cost about 26k tokens (≈ $0.03).
+- Next: T6 (Tiger Data), T7 (Research Mode), then N1 (WhatsApp), polish, Devpost.
+- Deploy: `bash deploy/deploy.sh` ships pushed code; add `--env` to re-upload `.env`.
