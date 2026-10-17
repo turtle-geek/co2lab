@@ -29,8 +29,8 @@ function Eyes({ mood }: { mood: DeviceState }) {
       // ^ ^ happy arches
       return (
         <g {...p}>
-          <path d="M72 82 q7 -13 14 0" />
-          <path d="M114 82 q7 -13 14 0" />
+          <path style={{ d: 'path("M72 82 q7 -13 14 0")' }} />
+          <path style={{ d: 'path("M114 82 q7 -13 14 0")' }} />
         </g>
       );
     case "working":
@@ -45,8 +45,8 @@ function Eyes({ mood }: { mood: DeviceState }) {
       // closed, sleeping
       return (
         <g {...p}>
-          <path d="M71 87 q8 10 16 0" />
-          <path d="M113 87 q8 10 16 0" />
+          <path style={{ d: 'path("M71 87 q8 10 16 0")' }} />
+          <path style={{ d: 'path("M113 87 q8 10 16 0")' }} />
         </g>
       );
     case "resting":
@@ -141,7 +141,7 @@ type Placement = { x: number; y: number; width: number; height: number };
  */
 export function Tree({ mood, placement }: { mood: DeviceState; placement?: Placement }) {
   const cheeks = CHEEKS[mood];
-  const cheekRx = mood === "hot" ? 12.5 : 11.5;
+  const cheekRx = mood === "hot" ? 12.5 : mood === "offline" ? 13.5 : 11.5;
   const cheekRy = mood === "hot" ? 8.5 : 8;
   return (
     <svg
@@ -180,12 +180,9 @@ export function Tree({ mood, placement }: { mood: DeviceState; placement?: Place
       )}
       {mood === "offline" && (
         <g className="tree__zzz">
-          <text x="140" y="44" fontSize="16">z</text>
-          <text x="151" y="34" fontSize="21">z</text>
-          <text x="164" y="24" fontSize="27">Z</text>
-          <circle cx="166" cy="70" r="4.5" />
-          <circle cx="174" cy="82" r="3" />
-          <circle cx="168" cy="92" r="2.2" />
+          <text x="122" y="72" fontSize="14">z</text>
+          <text x="132" y="61" fontSize="18">z</text>
+          <text x="144" y="49" fontSize="24">Z</text>
         </g>
       )}
       {mood === "hot" && (
