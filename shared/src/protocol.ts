@@ -11,7 +11,8 @@ export const AppId = z.enum(KNOWN_APPS);
 export type AppId = z.infer<typeof AppId>;
 
 /** `web` or `app:<appId>`; the scheduler matches subtasks to devices by this. */
-export const Capability = z.string().regex(/^(web|app:[a-z0-9-]+)$/);
+/** `app:<id>` is a recipe app id (tims) or, for the general agent, an Android package name (com.valvesoftware.android.steam.community). */
+export const Capability = z.string().regex(/^(web|app:[A-Za-z0-9._-]+)$/);
 export type Capability = z.infer<typeof Capability>;
 
 /** `desktop` is a computer without a battery or a portable chassis (found by the web worker's auto-detection). */
@@ -96,6 +97,10 @@ export const ProxyAction = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("back") }),
   z.object({ kind: z.literal("scroll"), direction: z.enum(["up", "down"]) }),
   z.object({ kind: z.literal("wait"), ms: z.number().int().min(0).max(10_000) }),
+  /** Web agent only: type into an input (and press Enter when submit). */
+  z.object({ kind: z.literal("type"), nodeId: z.string(), text: z.string().max(200), submit: z.boolean() }),
+  /** Web agent only: go to a URL. */
+  z.object({ kind: z.literal("open"), url: z.string().url() }),
   z.object({ kind: z.literal("done") }),
   z.object({ kind: z.literal("fail"), reason: z.string() }),
 ]);
@@ -109,6 +114,39 @@ export const Evidence = z.object({
   text: z.string().nullable().default(null),
 });
 export type Evidence = z.infer<typeof Evidence>;
+
+// ---------- General agent (P4, SPEC §4.8) ----------
+
+/**
+ * One fact a device can tell the planner: an installed app (id = Android package), a Steam game
+ * (id = Steam app ID), the browser it drives. Devices send only these, never raw files.
+ */
+export const ContextItem = z.object({
+  kind: z.enum(["installed_app", "steam_game", "browser"]),
+  id: z.string().max(200),
+  label: z.string().max(200),
+});
+export type ContextItem = z.infer<typeof ContextItem>;
+
+/** The planner's final answer to a general request. */
+export const RunAnswer = z.object({
+  text: z.string(),
+  items: z.array(
+    z.object({
+      title: z.string(),
+      detail: z.string(),
+      /** Where it came from: an app, a site, or "review analysis". */
+      source: z.string(),
+      deviceId: z.string().nullable(),
+      url: z.string().nullable(),
+    }),
+  ),
+});
+export type RunAnswer = z.infer<typeof RunAnswer>;
+
+/** Extra instructions on subtask.assign for the web agent loop (absent = the RedFlagDeals recipe). */
+export const WebAgentSpec = z.object({ startUrl: z.string().url().nullable(), maxSteps: z.number().int().min(1).max(30) });
+export type WebAgentSpec = z.infer<typeof WebAgentSpec>;
 
 // ---------- Views the hub sends to dashboards ----------
 
@@ -130,6 +168,8 @@ export const DeviceView = z.object({
   currentTask: CurrentTask.nullable(),
   /** Short message shown on the card, e.g. "plug in Galaxy A54" or a failure reason. */
   note: z.string().nullable(),
+  /** What this device shares with the planner (P4), e.g. installed apps or Steam games. */
+  context: z.array(ContextItem).optional(),
 });
 export type DeviceView = z.infer<typeof DeviceView>;
 
@@ -143,6 +183,8 @@ export const SubtaskView = z.object({
   attempt: z.number().int(),
   error: z.string().nullable(),
   dealCount: z.number().int(),
+  /** General-agent tasks: what was found, in one or two sentences. */
+  findings: z.string().nullable().optional(),
 });
 export type SubtaskView = z.infer<typeof SubtaskView>;
 
@@ -154,6 +196,8 @@ export const RunView = z.object({
   status: RunStatus,
   subtasks: z.array(SubtaskView),
   ranked: z.array(RankedDeal).nullable(),
+  /** General-agent requests (P4): the answer, with each item's source. Deal requests use `ranked`. */
+  answer: RunAnswer.nullable().optional(),
   burn: Burn,
   error: z.string().nullable(),
   createdAt: z.number(),
@@ -453,6 +497,8 @@ export const DeviceToHub = z.discriminatedUnion("type", [
     counts: z.array(AspectCount),
   }),
   z.object({ type: z.literal("job.failed"), jobId: z.string(), reason: z.string() }),
+  /** Sent after hello.ok and whenever it changes: what this device can tell the planner. */
+  z.object({ type: z.literal("device.context"), items: z.array(ContextItem).max(2000) }),
 ]);
 export type DeviceToHub = z.infer<typeof DeviceToHub>;
 
@@ -468,6 +514,8 @@ export const HubToDevice = z.discriminatedUnion("type", [
     /** Plain-language goal, e.g. "Collect all current offers in the Tim Hortons app". */
     goal: z.string(),
     config: AgentConfig,
+    /** Present for general web tasks: run the browser agent loop instead of a built-in recipe. */
+    agent: WebAgentSpec.optional(),
   }),
   z.object({ type: z.literal("subtask.cancel"), subtaskId: z.string() }),
   z.object({ type: z.literal("proxy.action"), requestId: z.string(), action: ProxyAction }),
