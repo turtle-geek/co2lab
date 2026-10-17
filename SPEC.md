@@ -51,6 +51,7 @@ Fallback rule: if an app fails live, its subtask shows "failed: <reason>" on the
 - **P1 Research Mode (Papiers Autoresearch Challenge)**: see section 4.5.
 - **P2 Tiger Data**: telemetry, agent steps, runs, experiments, trials stored in Tiger Data (time-series Postgres). Until P2 lands, the hub keeps state in memory behind the same repository interface.
 - **P3 Compute jobs** (Steam "worth it?" review analysis split across the old devices): see section 4.7.
+- **P4 General agent** (any request, planned from each device's context; no fixed task list): see section 4.8.
 
 ### Nice-to-have
 
@@ -161,6 +162,28 @@ Pipeline (one request = one **job set**):
 What it is not: no simulated "players like you" predictions (review playtime is when the review was written, so it cannot support "you will hit the grind wall by hour 35"), and the hub never runs arbitrary commands on devices: workers only run job types built into them.
 
 Done when: one Steam request runs end to end with jobs split across the Dragonfly, the Cloud worker and the A54; temperature and battery are visible per device during the run; and one Lab cycle compares fast vs. eco on the same saved reviews.
+
+### 4.8 General agent: any request, planned from what the devices have (P4)
+
+Goal: no hard-coded task list. **Gemini decides what to do; code decides who does it.**
+
+1. **Device context (reported on connect, refreshed on change).** Each device tells the hub what it knows, as typed items (`kind`, `id`, `label`):
+   - Android: every launchable installed app (`installed_app`, package name + label). *(needs the Android update, phase 2)*
+   - Computers: the browser it drives (`browser`), and if Steam is installed, the installed games from Steam's own `steamapps/appmanifest_*.acf` files (`steam_game`, app ID + name). Read-only, these files only, nothing else on disk.
+   - Opt-in happens once at pairing ("Full helper" vs "Worker only"); devices paired before this default to Full helper. Device cards show what each device shares.
+2. **Planner agent (Gemini, wave 1).** Input: the request, plus a catalog of online devices with their kind, health and context. Output: tasks using three tools, validated against the catalog:
+   - `app {package, goal}`: runs on a phone that has that app (recipe when one exists, else the vision agent loop).
+   - `web {goal, startUrl?}`: runs on a laptop or the Cloud worker (browser agent loop).
+   - `reviews {steamAppIds}`: a compute job set (§4.7).
+   It may also answer "no device can do this" with the reason.
+3. **Scheduler (code, unchanged rules):** capability + health + home-first; lid-close reassignment.
+4. **Device agent loops:** observe (screenshot + numbered clickable elements + text) → Gemini picks one action (`tap`, `type`, `scroll`, `back`, `open url`, `done`, `fail`) via the hub proxy → act; max 15 steps on the web, 8 on the phone. Evidence (screenshots + text) goes back to the hub, which extracts **findings** for the task's goal.
+5. **Follow-up (wave 2, optional, max 1):** the planner sees the wave-1 findings and may add tasks (e.g. review analysis for the candidates found).
+6. **Answer (Gemini):** one answer to the request with items and their sources (device, app or site). Food-deal requests still use the deal recipes and the deal ranking, so the rehearsed demo path does not change.
+
+Safety: agents never enter credentials, never pay or order, never send or post. A goal that needs any of those ends the task with "needs the owner". Approvals for side effects go through the dashboard (`approval.*`).
+
+Phase 1 (hub + laptops, no phone update): context from computers, planner with all three tools, web agent, follow-up wave, generic answer; `app` tasks limited to apps with recipes. Phase 2 (Android): installed-apps context and the vision agent for any app.
 
 ## 5. Tech stack and why
 
