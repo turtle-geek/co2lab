@@ -10,102 +10,79 @@ const INK = "#2f3a2a";
 /**
  * Face layout per mood, following the reference: eyes sit a little above the middle of the crown,
  * the mouth is tucked just under them, and the mouth's lowest point is level with the cheek
- * centres. Asleep, the face drops into the slumped lower half of the crown.
+ * centres. Asleep, the face drops a little into the fuller lower half of the crown.
  */
 const CHEEKS: Record<DeviceState, { y: number; dx: number } | null> = {
   idle: { y: 92, dx: 37 },
   working: { y: 93, dx: 37 },
-  offline: { y: 104, dx: 40 },
+  offline: { y: 100, dx: 40 },
   resting: { y: 94, dx: 37 },
   hot: { y: 94, dx: 37 },
   error: { y: 94, dx: 37 },
   revoked: null,
 };
 
-function Eyes({ mood }: { mood: DeviceState }) {
-  const p = { stroke: INK, strokeWidth: 4, fill: "none", strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  switch (mood) {
-    case "idle":
-      // ^ ^ happy arches
-      return (
-        <g {...p}>
-          <path style={{ d: 'path("M72 82 q7 -13 14 0")' }} />
-          <path style={{ d: 'path("M114 82 q7 -13 14 0")' }} />
-        </g>
-      );
-    case "working":
-      // > < squint
-      return (
-        <g {...p}>
-          <path d="M72 77 l12 6 l-12 6" />
-          <path d="M128 77 l-12 6 l12 6" />
-        </g>
-      );
-    case "offline":
-      // closed, sleeping
-      return (
-        <g {...p}>
-          <path style={{ d: 'path("M71 87 q8 10 16 0")' }} />
-          <path style={{ d: 'path("M113 87 q8 10 16 0")' }} />
-        </g>
-      );
-    case "resting":
-      // heavy lids
-      return (
-        <g {...p}>
-          <path d="M70 82 h17" />
-          <path d="M113 82 h17" />
-          <path d="M72 86 q6.5 4 13 0" strokeWidth={3} />
-          <path d="M115 86 q6.5 4 13 0" strokeWidth={3} />
-        </g>
-      );
-    case "hot":
-      // worried, wide
-      return (
-        <g>
-          <circle cx="79" cy="83" r="5" fill={INK} />
-          <circle cx="121" cy="83" r="5" fill={INK} />
-          <path d="M69 71 l16 4 M131 71 l-16 4" {...p} strokeWidth={3} />
-        </g>
-      );
-    case "error":
-      // dizzy spirals
-      return (
-        <g {...p} strokeWidth={3} className="tree__dizzy">
+/**
+ * Every eye is one cubic curve ("M x y C …") and every mouth is two ("M x y C … C …"), so CSS can
+ * morph any expression into any other. A dot is a near-zero-length curve with a thick round stroke;
+ * the "o" mouth is a closed pair of curves with a fill.
+ */
+type Stroke = { d: string; width: number };
+type Eyes = { left: Stroke; right: Stroke };
+type Mouth = Stroke & { filled: boolean };
+
+const EYES: Record<DeviceState, Eyes> = {
+  // ^ ^ happy arches
+  idle: { left: { d: "M72 82 C76.67 73.33 81.33 73.33 86 82", width: 4 }, right: { d: "M114 82 C118.67 73.33 123.33 73.33 128 82", width: 4 } },
+  // > < squint
+  working: { left: { d: "M72 77 C86 81 86 85 72 89", width: 4 }, right: { d: "M128 77 C114 81 114 85 128 89", width: 4 } },
+  // closed, sleeping
+  offline: { left: { d: "M71 87 C76.33 93.67 81.67 93.67 87 87", width: 4 }, right: { d: "M113 87 C118.33 93.67 123.67 93.67 129 87", width: 4 } },
+  // heavy, drooping lids
+  resting: { left: { d: "M71 84 C76 87 82 87 87 84", width: 4 }, right: { d: "M113 84 C118 87 124 87 129 84", width: 4 } },
+  // wide, worried dots
+  hot: { left: { d: "M78.5 83 C78.8 83 79.2 83 79.5 83", width: 10 }, right: { d: "M120.5 83 C120.8 83 121.2 83 121.5 83", width: 10 } },
+  // dazed dots (the spirals fade in on top)
+  error: { left: { d: "M78.5 83 C78.8 83 79.2 83 79.5 83", width: 3 }, right: { d: "M120.5 83 C120.8 83 121.2 83 121.5 83", width: 3 } },
+  // flat, faded
+  revoked: { left: { d: "M72 84 C76.67 84 81.33 84 86 84", width: 3 }, right: { d: "M114 84 C118.67 84 123.33 84 128 84", width: 3 } },
+};
+
+const MOUTH: Record<DeviceState, Mouth> = {
+  // small smile right under the eyes, bottom level with the cheeks
+  idle: { d: "M93 88 C95 90.7 97.5 92 100 92 C102.5 92 105 90.7 107 88", width: 4, filled: false },
+  // tight, slightly strained
+  working: { d: "M94 94 C96 92.7 98 92 100 92 C102 92 104 92.7 106 94", width: 4, filled: false },
+  // small "o"
+  offline: { d: "M100 97.2 C104.9 97.2 104.9 106.8 100 106.8 C95.1 106.8 95.1 97.2 100 97.2", width: 1.5, filled: true },
+  resting: { d: "M92 96 C94.7 94 97.3 93 100 93 C102.7 93 105.3 94 108 96", width: 4, filled: false },
+  // wobbly
+  hot: { d: "M88 94 C92 88.5 96 88.5 100 94 C104 99.5 108 99.5 112 94", width: 3, filled: false },
+  // big "o"
+  error: { d: "M100 88 C108 88 108 102 100 102 C92 102 92 88 100 88", width: 1.5, filled: true },
+  revoked: { d: "M90 98 C93.3 95.3 96.7 94 100 94 C103.3 94 106.7 95.3 110 98", width: 4, filled: false },
+};
+
+function Face({ mood }: { mood: DeviceState }) {
+  const eyes = EYES[mood];
+  const mouth = MOUTH[mood];
+  const stroke = (s: Stroke) => ({ d: `path("${s.d}")`, strokeWidth: s.width });
+  return (
+    <>
+      <g className="tree__eyes">
+        <path className="tree__eye" style={stroke(eyes.left)} />
+        <path className="tree__eye" style={stroke(eyes.right)} />
+      </g>
+      <path className="tree__mouth" style={{ ...stroke(mouth), fill: mouth.filled ? INK : "rgba(47, 58, 42, 0)" }} />
+      {mood === "hot" && <path className="tree__extra" d="M69 71 l16 4 M131 71 l-16 4" stroke={INK} strokeWidth={3} strokeLinecap="round" fill="none" />}
+      {mood === "error" && (
+        <g className="tree__extra tree__dizzy" stroke={INK} strokeWidth={3} strokeLinecap="round" fill="none">
           <path d="M79 83 m0 0 a2 2 0 1 1 3 -1 a5 5 0 1 1 -7 -4 a8 8 0 1 1 12 7" />
           <path d="M121 83 m0 0 a2 2 0 1 1 3 -1 a5 5 0 1 1 -7 -4 a8 8 0 1 1 12 7" />
         </g>
-      );
-    case "revoked":
-      return (
-        <g {...p}>
-          <path d="M72 77 l13 12 M85 77 l-13 12" />
-          <path d="M115 77 l13 12 M128 77 l-13 12" />
-        </g>
-      );
-  }
-}
-
-function Mouth({ mood }: { mood: DeviceState }) {
-  const p = { stroke: INK, strokeWidth: 4, fill: "none", strokeLinecap: "round" as const };
-  switch (mood) {
-    case "idle":
-      // small smile right under the eyes, bottom level with the cheeks
-      return <path d="M93 88 q7 8 14 0" {...p} />;
-    case "working":
-      // tight, slightly strained
-      return <path d="M94 94 q6 -4 12 0" {...p} />;
-    case "offline":
-      return <ellipse cx="100" cy="104" rx="3.8" ry="4.8" fill={INK} />;
-    case "resting":
-      return <path d="M92 96 q8 -6 16 0" {...p} />;
-    case "hot":
-      return <path d="M88 94 q4 -5 8 0 q4 5 8 0 q4 -5 8 0" {...p} strokeWidth={3} />;
-    case "error":
-      return <ellipse cx="100" cy="95" rx="6" ry="7" fill={INK} />;
-    case "revoked":
-      return <path d="M90 98 q10 -8 20 0" {...p} />;
-  }
+      )}
+    </>
+  );
 }
 
 /**
@@ -170,8 +147,7 @@ export function Tree({ mood, placement }: { mood: DeviceState; placement?: Place
               <ellipse style={{ cx: 100 + cheeks.dx, cy: cheeks.y, rx: cheekRx, ry: cheekRy }} />
             </g>
           )}
-          <Eyes mood={mood} />
-          <Mouth mood={mood} />
+          <Face mood={mood} />
         </g>
       </g>
 

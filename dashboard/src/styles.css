@@ -692,9 +692,30 @@ code {
   transition: fill 0.5s ease, cx 0.7s cubic-bezier(0.45, 0, 0.25, 1), cy 0.7s cubic-bezier(0.45, 0, 0.25, 1),
     rx 0.7s ease, ry 0.7s ease;
 }
-/* idle and asleep eyes share a path shape, so opening and closing them morphs smoothly */
-.tree__face path {
-  transition: d 0.7s cubic-bezier(0.45, 0, 0.25, 1);
+/* Eyes and mouths share one path shape across moods, so every expression change morphs. */
+.tree__eye,
+.tree__mouth {
+  stroke: #2f3a2a;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: d 0.7s cubic-bezier(0.45, 0, 0.25, 1), stroke-width 0.7s cubic-bezier(0.45, 0, 0.25, 1),
+    fill 0.7s cubic-bezier(0.7, 0, 0.3, 1);
+}
+.tree__eye {
+  fill: none;
+}
+/* extras that only some moods have (brows, spirals, zzz) fade in instead of popping */
+.tree__extra,
+.tree__zzz {
+  animation: tree-fade-in 0.6s ease both;
+}
+@keyframes tree-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .tree__crown {
   transform-box: fill-box;
