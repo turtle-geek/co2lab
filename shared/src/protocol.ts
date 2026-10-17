@@ -318,6 +318,76 @@ export const PendingDevice = z.object({
 });
 export type PendingDevice = z.infer<typeof PendingDevice>;
 
+// ---------- Compute jobs (P3, SPEC §4.7) ----------
+// Devices pull batches; the hub decides batch size, threads and pauses from the split strategy and live telemetry.
+
+export const ComputeKind = z.enum(["embed"]);
+export type ComputeKind = z.infer<typeof ComputeKind>;
+
+export const SplitStrategy = z.enum(["fast", "eco"]);
+export type SplitStrategy = z.infer<typeof SplitStrategy>;
+
+export const AspectSpec = z.object({ name: z.string(), seeds: z.array(z.string()).min(1) });
+export type AspectSpec = z.infer<typeof AspectSpec>;
+
+export const ComputeItem = z.object({ id: z.string(), text: z.string(), playtimeH: z.number() });
+export type ComputeItem = z.infer<typeof ComputeItem>;
+
+const PosNeg = z.object({ pos: z.number().int(), neg: z.number().int() });
+/** Sentence counts for one aspect, split by the reviewer's playtime when they wrote the review. */
+export const AspectCount = z.object({
+  aspect: z.string(),
+  pos: z.number().int(),
+  neg: z.number().int(),
+  byPlaytime: z.object({ under5h: PosNeg, from5to30h: PosNeg, over30h: PosNeg }),
+  /** A few example sentences (negative first), for the answer and the dashboard. */
+  examples: z.array(z.object({ text: z.string(), positive: z.boolean() })).max(4),
+});
+export type AspectCount = z.infer<typeof AspectCount>;
+
+export const ComputeDeviceView = z.object({
+  deviceId: z.string(),
+  name: z.string(),
+  state: z.enum(["working", "paused", "idle"]),
+  batches: z.number().int(),
+  sentences: z.number().int(),
+  sentencesPerS: z.number().nullable(),
+  batchSize: z.number().int(),
+  threads: z.number().int(),
+  tempC: z.number().nullable(),
+  peakTempC: z.number().nullable(),
+  /** Estimate: active seconds x a per-device-kind wattage scaled by CPU load. */
+  energyWh: z.number(),
+});
+export type ComputeDeviceView = z.infer<typeof ComputeDeviceView>;
+
+export const ComputeSetView = z.object({
+  id: z.string(),
+  appId: z.number().int(),
+  title: z.string(),
+  strategy: SplitStrategy,
+  status: z.enum(["fetching", "running", "done", "failed", "cancelled"]),
+  error: z.string().nullable(),
+  createdAt: z.number(),
+  startedAt: z.number().nullable(),
+  finishedAt: z.number().nullable(),
+  reviews: z.object({
+    fetched: z.number().int(),
+    kept: z.number().int(),
+    dropped: z.object({ lowPlaytime: z.number().int(), free: z.number().int(), duplicate: z.number().int(), tooShort: z.number().int() }),
+    /** Days with a burst of negative reviews (review bombing), as YYYY-MM-DD. */
+    bombDays: z.array(z.string()),
+  }),
+  batches: z.object({ total: z.number().int(), done: z.number().int(), inFlight: z.number().int(), retried: z.number().int() }),
+  sentences: z.number().int(),
+  devices: z.array(ComputeDeviceView),
+  /** In-run feedback decisions, newest last (e.g. "paused Dragonfly at 39 °C"). */
+  decisions: z.array(z.object({ at: z.number(), deviceId: z.string().nullable(), text: z.string() })),
+  aspects: z.array(AspectCount),
+  energyWh: z.number(),
+});
+export type ComputeSetView = z.infer<typeof ComputeSetView>;
+
 // ---------- Handshake (first message on every socket) ----------
 
 export const Hello = z.object({
@@ -362,6 +432,19 @@ export const DeviceToHub = z.discriminatedUnion("type", [
     nodes: z.array(UiNode),
     history: z.array(z.string()),
   }),
+  // Compute jobs: an idle device asks for work it can run; it reports how the batch went.
+  z.object({ type: z.literal("job.pull"), kinds: z.array(ComputeKind).min(1), cores: z.number().int().min(1) }),
+  z.object({
+    type: z.literal("job.result"),
+    jobId: z.string(),
+    durationMs: z.number().int(),
+    sentences: z.number().int(),
+    threads: z.number().int(),
+    cpuPct: z.number().nullable(),
+    tempC: z.number().nullable(),
+    counts: z.array(AspectCount),
+  }),
+  z.object({ type: z.literal("job.failed"), jobId: z.string(), reason: z.string() }),
 ]);
 export type DeviceToHub = z.infer<typeof DeviceToHub>;
 
@@ -380,6 +463,19 @@ export const HubToDevice = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("subtask.cancel"), subtaskId: z.string() }),
   z.object({ type: z.literal("proxy.action"), requestId: z.string(), action: ProxyAction }),
+  z.object({
+    type: z.literal("job.assign"),
+    jobId: z.string(),
+    setId: z.string(),
+    kind: ComputeKind,
+    /** Pinned so every device scores the same text the same way. */
+    models: z.object({ embed: z.string(), sentiment: z.string() }),
+    threads: z.number().int().min(1),
+    items: z.array(ComputeItem),
+    aspects: z.array(AspectSpec),
+  }),
+  /** Nothing for you now (no work, or the feedback loop paused you); ask again after retryMs. */
+  z.object({ type: z.literal("job.none"), retryMs: z.number().int(), reason: z.string() }),
   z.object({ type: z.literal("error"), code: z.string(), message: z.string() }),
 ]);
 export type HubToDevice = z.infer<typeof HubToDevice>;
@@ -415,6 +511,14 @@ export const ClientToHub = z.discriminatedUnion("type", [
     kind: z.enum(["flag", "approve", "redirect"]),
     text: z.string(),
   }),
+  // Compute jobs
+  z.object({
+    type: z.literal("compute.start"),
+    appId: z.number().int().positive(),
+    strategy: SplitStrategy,
+    maxReviews: z.number().int().min(100).max(20_000).optional(),
+  }),
+  z.object({ type: z.literal("compute.cancel"), setId: z.string() }),
 ]);
 export type ClientToHub = z.infer<typeof ClientToHub>;
 
@@ -429,6 +533,7 @@ export const HubToClient = z.discriminatedUnion("type", [
     approvals: z.array(ApprovalView),
     experiments: z.array(ExperimentView),
     defaultConfig: AgentConfig,
+    computeSets: z.array(ComputeSetView).optional(),
   }),
   z.object({ type: z.literal("device.update"), device: DeviceView }),
   z.object({ type: z.literal("device.removed"), deviceId: z.string() }),
@@ -457,6 +562,7 @@ export const HubToClient = z.discriminatedUnion("type", [
   z.object({ type: z.literal("approval.request"), approval: ApprovalView }),
   z.object({ type: z.literal("approval.resolved"), approvalId: z.string(), approved: z.boolean() }),
   z.object({ type: z.literal("research.update"), experiment: ExperimentView }),
+  z.object({ type: z.literal("compute.update"), set: ComputeSetView }),
   z.object({ type: z.literal("error"), code: z.string(), message: z.string() }),
 ]);
 export type HubToClient = z.infer<typeof HubToClient>;

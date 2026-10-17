@@ -22,6 +22,7 @@ import { DeviceRegistry, type LiveDevice } from "./devices.js";
 import { log } from "./log.js";
 import { Pairing, type RedeemError } from "./pairing.js";
 import type { Repository } from "./repo/index.js";
+import { ComputeManager, UserError as ComputeUserError } from "./compute/manager.js";
 import { ResearchLab, UserError, researchStoreFor } from "./research/index.js";
 import { DEFAULT_CONFIG, RunManager } from "./runs.js";
 
@@ -41,6 +42,7 @@ export class Hub {
   readonly devices: DeviceRegistry;
   readonly runs: RunManager;
   readonly research: ResearchLab;
+  readonly compute: ComputeManager;
   readonly pairing = new Pairing();
   readonly deviceCodes = new DeviceCodes();
   private clients = new Set<ClientConn>();
@@ -56,6 +58,12 @@ export class Hub {
       sendToDevice: (d, m) => this.sendToDevice(d, m),
       deviceChanged: (d) => this.publishDevice(d),
       onEvidence: (...a) => this.research.onEvidence(...a),
+    });
+    this.compute = new ComputeManager({
+      devices: this.devices,
+      broadcast: (m) => this.broadcast(m),
+      sendToDevice: (d, m) => this.sendToDevice(d, m),
+      deviceChanged: (d) => this.publishDevice(d),
     });
     this.research = new ResearchLab({
       store: researchStoreFor(repo),
@@ -125,6 +133,7 @@ export class Hub {
       runs: this.runs.recentViews(),
       approvals: [],
       experiments: this.research.views(),
+      computeSets: this.compute.views(),
       defaultConfig: DEFAULT_CONFIG,
     };
   }
@@ -141,10 +150,12 @@ export class Hub {
       log.info(`device ${d.rec.name} offline (no heartbeat for >6 s)`);
       this.persistTelemetry(d, false);
       this.runs.onDeviceLost(d, "went offline");
+      this.compute.onDeviceLost(d, "went offline");
       this.publishDevice(d);
     }
     for (const d of this.devices.sweepErrors(now)) this.publishDevice(d);
     this.runs.tick(now);
+    this.compute.tick(now);
   }
 
   private ping() {
@@ -299,7 +310,8 @@ export class Hub {
         this.runs.schedule();
       }
       try {
-        this.runs.onDeviceMessage(d, msg);
+        if (msg.type === "job.pull" || msg.type === "job.result" || msg.type === "job.failed") this.compute.onDeviceMessage(d, msg);
+        else this.runs.onDeviceMessage(d, msg);
       } catch (e) {
         log.error(`device message ${msg.type}`, e);
       }
@@ -380,6 +392,7 @@ export class Hub {
           d.socket = null;
         }
         this.runs.onDeviceLost(d, "was revoked");
+        this.compute.onDeviceLost(d, "was revoked");
         d.current = null;
         this.publishDevice(d);
         setTimeout(() => {
@@ -394,6 +407,16 @@ export class Hub {
         this.sendRaw(ws, { type: "viewer.link", ...link });
         return;
       }
+      case "compute.start":
+      case "compute.cancel":
+        try {
+          if (msg.type === "compute.start") await this.compute.start(msg.appId, msg.strategy, msg.maxReviews);
+          else this.compute.cancel(msg.setId);
+        } catch (e) {
+          if (!(e instanceof ComputeUserError)) throw e;
+          this.sendRaw(ws, { type: "error", code: "compute", message: e.message });
+        }
+        return;
       case "research.capture":
       case "research.label":
       case "research.propose":
