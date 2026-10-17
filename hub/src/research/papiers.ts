@@ -66,10 +66,18 @@ function run(args: string[]): Promise<unknown> {
   });
 }
 
+/** Warnings from the most recent search (e.g. index not ready), for the hub log. */
+export let lastWarnings: string[] = [];
+
 const str = (v: unknown) => (typeof v === "string" ? v : null);
 
 export async function papiersSearch(query: string, limit = 5): Promise<PapiersHit[]> {
-  const res = (await run(["search", query, "--limit", String(limit), "--json"])) as { results?: unknown[]; items?: unknown[] };
+  const res = (await run(["search", query, "--limit", String(limit), "--json"])) as {
+    results?: unknown[];
+    items?: unknown[];
+    warnings?: { message?: string }[];
+  };
+  if (res.warnings?.length) lastWarnings = res.warnings.map((w) => w.message ?? "").filter(Boolean);
   const list = (res.results ?? res.items ?? []) as Record<string, unknown>[];
   return list
     .map((r) => {
@@ -77,6 +85,14 @@ export async function papiersSearch(query: string, limit = 5): Promise<PapiersHi
       const parts = [str(r.snippet) ?? str(r.preview), ...evidence.map((e) => str(e.snippet))].filter((s): s is string => !!s?.trim());
       return { id: String(r.id ?? ""), kind: String(r.kind ?? ""), title: str(r.title), text: parts.join("\n").slice(0, 1500) };
     })
+    .filter((h) => h.id);
+}
+
+/** Recent items of one kind (document, note, highlight), to see what the library holds. */
+export async function papiersList(kind: string, limit = 15): Promise<PapiersHit[]> {
+  const res = (await run(["list", "--kind", kind, "--limit", String(limit), "--json"])) as { items?: Record<string, unknown>[] };
+  return (res.items ?? [])
+    .map((r) => ({ id: String(r.id ?? ""), kind: String(r.kind ?? kind), title: str(r.title), text: (str(r.preview) ?? "").slice(0, 600) }))
     .filter((h) => h.id);
 }
 

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { config } from "../config.js";
 import { callJson, type UsageSink } from "../gemini.js";
 import { log } from "../log.js";
-import { papiersProblem, papiersRead, papiersSearch, type PapiersHit } from "./papiers.js";
+import { lastWarnings, papiersList, papiersProblem, papiersRead, papiersSearch, type PapiersHit } from "./papiers.js";
 
 export const RESEARCH_QUESTION = "What is the cheapest agent configuration that still reads in-app deals correctly?";
 
@@ -35,6 +35,19 @@ const QuerySchema = z.object({ queries: z.array(z.string().min(3).max(80)).min(1
 export async function gatherPapiers(focus: string, onUsage: UsageSink): Promise<PapiersContext> {
   const problem = papiersProblem();
   if (problem) return { queries: [], hits: [], error: problem };
+  // Survey first (what the library actually holds), as the Papiers research skill recommends.
+  const listed: PapiersHit[] = [];
+  const errors: string[] = [];
+  for (const kind of ["document", "note", "highlight", "conversation"]) {
+    try {
+      listed.push(...(await papiersList(kind, 15)));
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
+  }
+  log.info(`research: papiers library survey: ${listed.length} recent item(s)`);
+  const survey = listed.map((h) => `- ${h.title ?? h.id} (${h.kind})`).join("\n");
+
   let queries: string[];
   try {
     const out = await callJson({
@@ -47,7 +60,13 @@ export async function gatherPapiers(focus: string, onUsage: UsageSink): Promise<
         "Write 2-3 short keyword search queries (3-6 words each) likely to find relevant prior work: vision-language " +
         "models reading screenshots or UI text, image resolution vs. accuracy, OCR, small vs. large model cost/accuracy " +
         "trade-offs, token cost of images, evaluation with human labels.",
-      parts: [{ text: `Research question: ${RESEARCH_QUESTION}\nCurrent focus: ${focus}` }],
+      parts: [
+        {
+          text:
+            `Research question: ${RESEARCH_QUESTION}\nCurrent focus: ${focus}\n\n` +
+            `Recent items in the library (aim queries at what is actually there; short queries match best):\n${survey || "(listing unavailable)"}`,
+        },
+      ],
     });
     queries = out.queries;
   } catch (e) {
@@ -56,25 +75,30 @@ export async function gatherPapiers(focus: string, onUsage: UsageSink): Promise<
   }
 
   const hits: PapiersContext["hits"] = [];
-  const errors: string[] = [];
   for (const q of queries) {
     try {
-      for (const h of await papiersSearch(q, 4)) if (!hits.some((x) => x.id === h.id)) hits.push({ ...h, key: "" });
+      const found = await papiersSearch(q, 4);
+      log.info(`research: papiers search "${q}": ${found.length} hit(s)${lastWarnings.length ? ` (${lastWarnings.join("; ")})` : ""}`);
+      for (const h of found) if (!hits.some((x) => x.id === h.id)) hits.push({ ...h, key: "" });
     } catch (e) {
       errors.push((e as Error).message);
     }
   }
-  // Read the top documents/notes in more depth than the search snippet.
-  for (const h of hits.slice(0, 2)) {
+  // No search hits: fall back to the surveyed items the query writer judged closest (first ones listed).
+  if (!hits.length) for (const h of listed.slice(0, 4)) hits.push({ ...h, key: "" });
+  // Read the top items in more depth; document hits often carry no snippet of their own.
+  for (const h of hits.slice(0, 4)) {
     try {
       const more = await papiersRead(h.id, 2000);
-      if (more.trim()) h.text = `${h.text}\n${more}`.slice(0, 2500);
+      if (more.trim()) h.text = `${h.text}\n${more}`.trim().slice(0, 2500);
     } catch (e) {
       errors.push((e as Error).message);
     }
   }
-  const kept = hits.filter((h) => h.text.trim()).slice(0, 8);
+  const kept = hits.filter((h) => h.text.trim() || h.title?.trim()).slice(0, 8);
+  for (const h of kept) if (!h.text.trim()) h.text = h.title ?? "";
   kept.forEach((h, i) => (h.key = `P${i + 1}`));
+  for (const e of errors) log.warn(`research: ${e}`);
   const error = kept.length ? null : errors[0] ?? `Papiers returned nothing for: ${queries.join("; ")}`;
   return { queries, hits: kept, error };
 }
@@ -117,14 +141,14 @@ export async function proposeExperiment(opts: {
   const keys = opts.papiers.hits.map((h) => h.key);
   const fbIds = opts.feedback.map((f) => f.id);
   const schema = z.object({
-    title: z.string().min(5).max(90),
-    hypothesis: z.string().min(20).max(900),
+    title: z.string().min(5).max(200),
+    hypothesis: z.string().min(20).max(2000),
     configs: z
       .array(z.object({ model: z.enum(["lite", "flash", "pro"]), scalePct: z.enum(["25", "50", "75", "100"]), mode: z.enum(["recipe", "vision"]) }))
       .min(2)
       .max(6),
     citations: keys.length
-      ? z.array(z.object({ ref: z.enum(keys as [string, ...string[]]), use: z.string().min(5).max(300) })).min(1).max(4)
+      ? z.array(z.object({ ref: z.enum(keys as [string, ...string[]]), use: z.string().min(5).max(600) })).min(1).max(4)
       : z.array(z.object({ ref: z.string(), use: z.string() })).max(0),
     citesFeedbackIds: fbIds.length
       ? z.array(z.enum(fbIds as [string, ...string[]])).min(fbIds.length)
@@ -156,10 +180,11 @@ export async function proposeExperiment(opts: {
     onUsage: opts.onUsage,
     system:
       `You are the research agent of Co2lab. Research question: ${RESEARCH_QUESTION} ${MODES_NOTE} ` +
-      "Design the next experiment: a falsifiable hypothesis with concrete numbers, and 2-6 configurations to compare " +
+      "Give it a short title (at most 10 words). Design the next experiment: a falsifiable hypothesis with concrete numbers, and 2-6 configurations to compare " +
       "(include one reference configuration that the cheaper ones are judged against). " +
       "Ground the hypothesis in the owner's library: cite at least one [P#] item you were given, saying what you took from it, " +
-      "and mention it in the hypothesis text as (P#). " +
+      "and mention it in the hypothesis text as (P#). Be honest about relevance: if an item is only loosely related, say what " +
+      "limited idea you take from it in `use` rather than overstating it. " +
       "The owner's feedback overrides your own plan: you must address every feedback item listed, list every feedback id " +
       "in citesFeedbackIds, and quote or paraphrase the feedback in the hypothesis (for example 'Following the owner's flag that ...'). " +
       "A redirect tells you what to test instead; follow it. A flag means a result the owner judged wrong; change the design so " +
@@ -192,10 +217,10 @@ export async function proposeExperiment(opts: {
 
 const AnalysisSchema = z.object({
   verdict: z.enum(["supported", "refuted", "inconclusive"]),
-  analysis: z.string().min(40).max(1500),
-  keyMisreads: z.array(z.string().max(200)).max(6),
-  nextProposal: z.string().min(10).max(400),
-  findingSummary: z.string().min(20).max(500),
+  analysis: z.string().min(40).max(4000),
+  keyMisreads: z.array(z.string().max(500)).max(8),
+  nextProposal: z.string().min(10).max(1000),
+  findingSummary: z.string().min(20).max(1200),
 });
 export type Analysis = z.infer<typeof AnalysisSchema>;
 
