@@ -22,19 +22,53 @@ export interface Usage {
 /** Called with every real Gemini response, including ones that later fail validation. */
 export type UsageSink = (u: Usage) => void;
 
-let client: GoogleGenAI | null = null;
+// ---------- Key pool ----------
+// With several keys (GEMINI_API_KEYS), a 429 puts the current key on a cooldown per model and the
+// call moves on to the next key at once. Keys are named by position only in logs, never by value.
+
+interface KeySlot {
+  n: number;
+  ai: GoogleGenAI;
+  /** model id -> time (ms) until which this key is out of quota for that model */
+  coolUntil: Map<string, number>;
+}
+
+const slots: KeySlot[] = config.gemini.apiKeys.map((apiKey, i) => ({ n: i + 1, ai: new GoogleGenAI({ apiKey }), coolUntil: new Map() }));
+let current = 0;
 
 export function geminiProblem(tier?: ModelTier): string | null {
-  if (!config.gemini.apiKey) return "GEMINI_API_KEY is not set on the hub";
+  if (!slots.length) return "GEMINI_API_KEY is not set on the hub";
   if (tier && !config.gemini.models[tier]) return `GEMINI_MODEL_${tier.toUpperCase()} is not set on the hub`;
   return null;
 }
 
-function getClient(tier: ModelTier): { ai: GoogleGenAI; model: string } {
+/** The key to use for this model: the current one unless it is cooling down, else the next ready one. */
+function pickSlot(model: string, now = Date.now()): KeySlot {
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[(current + i) % slots.length]!;
+    if ((s.coolUntil.get(model) ?? 0) <= now) {
+      current = (current + i) % slots.length;
+      return s;
+    }
+  }
+  // All keys are out of quota for this model: use the one that recovers first.
+  return slots.reduce((a, b) => ((a.coolUntil.get(model) ?? 0) <= (b.coolUntil.get(model) ?? 0) ? a : b));
+}
+
+/** How long a 429 keeps a key out: the server's retry hint, an hour for a daily quota, else a minute. */
+function cooldownMs(err: ApiError): number {
+  const m = err.message;
+  const hint = /retry(?:Delay)?["\s:in]*"?(\d+(?:\.\d+)?)s/i.exec(m);
+  if (/per ?day|PerDay|daily/i.test(m)) return 60 * 60_000;
+  if (hint) return Math.ceil(Number(hint[1]) * 1000) + 500;
+  return 60_000;
+}
+
+function getClient(tier: ModelTier): { slot: KeySlot; model: string } {
   const problem = geminiProblem(tier);
   if (problem) throw new GeminiUnavailable(problem);
-  client ??= new GoogleGenAI({ apiKey: config.gemini.apiKey });
-  return { ai: client, model: config.gemini.models[tier] };
+  const model = config.gemini.models[tier];
+  return { slot: pickSlot(model), model };
 }
 
 // Keywords Gemini's responseJsonSchema supports (per @google/genai docs); others are dropped.
@@ -89,15 +123,16 @@ export async function callJson<S extends z.ZodType>(opts: {
   schema: S;
   onUsage: UsageSink;
 }): Promise<z.infer<S>> {
-  const { ai, model } = getClient(opts.tier);
+  let { slot, model } = getClient(opts.tier);
   const responseJsonSchema = jsonSchema(opts.schema);
   let lastErr = "unknown error";
 
   for (let parseAttempt = 0; parseAttempt < 2; parseAttempt++) {
     let text: string | undefined;
+    let switches = 0;
     for (let i = 0; ; i++) {
       try {
-        const res = await ai.models.generateContent({
+        const res = await slot.ai.models.generateContent({
           model,
           contents: [{ role: "user", parts: opts.parts }],
           config: {
@@ -114,6 +149,18 @@ export async function callJson<S extends z.ZodType>(opts: {
         text = res.text;
         break;
       } catch (err) {
+        // Out of quota on this key: cool it down and move to the next key without waiting.
+        if (err instanceof ApiError && err.status === 429 && slots.length > 1 && switches < slots.length - 1) {
+          slot.coolUntil.set(model, Date.now() + cooldownMs(err));
+          const next = pickSlot(model);
+          if (next !== slot) {
+            log.warn(`gemini ${opts.label}: key #${slot.n} out of quota for ${model}; switching to key #${next.n}`);
+            slot = next;
+            switches++;
+            i--; // a key switch does not use up a backoff retry
+            continue;
+          }
+        }
         if (i < RETRY_DELAYS_MS.length && isRetryable(err)) {
           log.warn(`gemini ${opts.label}: ${describe(err)}; retrying in ${RETRY_DELAYS_MS[i]} ms`);
           await sleep(RETRY_DELAYS_MS[i]!);
