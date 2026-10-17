@@ -95,7 +95,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             <rect x="92" y="120" width="16" height="64" rx="6" fill="#7a5233" />
             <circle cx="100" cy="88" r="62" fill="#5c9f4c" />
           </svg>
-          <span>Co2lab</span>
+          <span className="brand-name" aria-label="CO2LAB">CO<sub>2</sub>LAB</span>
           {readOnly && <span className="badge">View only</span>}
           {DevPanel && <span className="badge badge--mock">Mock hub</span>}
         </div>

@@ -130,12 +130,12 @@ class AgentService : Service(), SubtaskRunner.Link {
 
     private fun startInForeground() {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Co2lab agent", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "CO₂LAB agent", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = Notification.Builder(this, CHANNEL)
-            .setContentTitle("Co2lab agent is on")
+            .setContentTitle("CO₂LAB agent is on")
             .setContentText("Connected to your hub and ready for tasks")
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentIntent(open)

@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
-        name: "Co2lab",
-        short_name: "Co2lab",
+        name: "CO₂LAB",
+        short_name: "CO₂LAB",
         description: "Your old devices, working together to find food deals.",
         theme_color: "#dfe6ec",
         background_color: "#dfe6ec",

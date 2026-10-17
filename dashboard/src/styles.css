@@ -1,4 +1,4 @@
-/* Co2lab dashboard. One stylesheet with tokens. Soft, calm: pale blue-gray page, cream cards. */
+/* CO₂LAB dashboard. One stylesheet with tokens. Soft, calm: pale blue-gray page, cream cards. */
 
 :root {
   --page: #dfe6ec;
@@ -178,6 +178,13 @@ code {
   gap: 16px;
   padding: 16px 0 12px;
   flex-wrap: wrap;
+}
+/* CO₂LAB wordmark: a small, lowered 2 that does not push the line height */
+.brand-name sub {
+  font-size: 0.62em;
+  line-height: 0;
+  vertical-align: -0.28em;
+  margin: 0 0.02em;
 }
 .brand {
   display: flex;

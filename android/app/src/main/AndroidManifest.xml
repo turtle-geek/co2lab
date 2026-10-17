@@ -12,7 +12,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <application
-        android:label="Co2lab"
+        android:label="CO₂LAB"
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
@@ -39,7 +39,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the connection to the user's own Co2lab hub open so it can run the user's agent tasks." />
+                android:value="Keeps the connection to the user's own CO₂LAB hub open so it can run the user's agent tasks." />
         </service>
 
         <receiver
@@ -54,7 +54,7 @@
         <service
             android:name=".AgentAccessibilityService"
             android:exported="false"
-            android:label="Co2lab agent"
+            android:label="CO₂LAB agent"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

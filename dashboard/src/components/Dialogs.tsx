@@ -58,7 +58,7 @@ export function PairDialog({
             )}
             <ol className="pair__steps">
               <li>
-                <b>Android:</b> open Co2lab → Scan QR (or type the code).
+                <b>Android:</b> open CO₂LAB → Scan QR (or type the code).
               </li>
               <li>
                 <b>Laptop:</b> <code>npm run pair -- {pair.code}</code> in <code>worker-web/</code>.

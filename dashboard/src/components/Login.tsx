@@ -24,7 +24,7 @@ export function Login({ onLogin }: { onLogin(passphrase: string): Promise<LoginR
         <div className="login__tree">
           <Tree mood="offline" />
         </div>
-        <h1>Co2lab</h1>
+        <h1 className="brand-name" aria-label="CO2LAB">CO<sub>2</sub>LAB</h1>
         <p className="login__sub">Wake up your device team.</p>
         <input
           className="input"

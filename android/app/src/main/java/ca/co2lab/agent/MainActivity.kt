@@ -48,7 +48,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad * 2, pad, pad * 2)
         }
-        column.addView(TextView(this).apply { text = "Co2lab agent"; textSize = 26f })
+        column.addView(TextView(this).apply { text = "CO₂LAB agent"; textSize = 26f })
         column.addView(TextView(this).apply {
             text = "This phone opens your deal apps and reports the offers to your hub."
             textSize = 14f
@@ -94,7 +94,7 @@ class MainActivity : Activity() {
         setup.addView(button("Turn on accessibility for Co2lab") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
-        setup.addView(button("Let Co2lab run in the background") { askBatteryExemption() })
+        setup.addView(button("Let CO₂LAB run in the background") { askBatteryExemption() })
         setup.addView(button("Turn off Power saving") {
             startActivity(Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))
         })
@@ -106,7 +106,7 @@ class MainActivity : Activity() {
             isChecked = store.batteryProtectionConfirmed
             setOnCheckedChangeListener { _, on -> store.batteryProtectionConfirmed = on; refresh() }
         })
-        setup.addView(hint("If accessibility says \"Restricted setting\": Settings → Apps → Co2lab → ⋮ → Allow restricted settings, then try again."))
+        setup.addView(hint("If accessibility says \"Restricted setting\": Settings → Apps → CO₂LAB → ⋮ → Allow restricted settings, then try again."))
 
         // ----- Debug -----
         val debug = section(column, "Debug")
@@ -159,7 +159,7 @@ class MainActivity : Activity() {
                 val raw = code.rawValue.orEmpty()
                 val uri = Uri.parse(raw)
                 if (uri.scheme == "co2lab" && uri.host == "pair") handlePairPayload(uri)
-                else showPair("That QR is not a Co2lab pairing code.")
+                else showPair("That QR is not a CO₂LAB pairing code.")
             }
             .addOnFailureListener { showPair("Scanner unavailable: ${it.message}. Type the address and code instead.") }
     }

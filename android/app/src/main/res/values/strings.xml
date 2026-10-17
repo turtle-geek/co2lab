@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="accessibility_description">Lets your Co2lab agent open your deal apps, read the offers on screen, and tap through them for you. It only acts when your own hub sends it a task.</string>
+    <string name="accessibility_description">Lets your CO₂LAB agent open your deal apps, read the offers on screen, and tap through them for you. It only acts when your own hub sends it a task.</string>
 </resources>
