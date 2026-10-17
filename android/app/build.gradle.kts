@@ -13,8 +13,8 @@ android {
         applicationId = "ca.co2lab.agent"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1-probe"
+        versionCode = 6
+        versionName = "0.6"
     }
 
     compileOptions {
@@ -29,4 +29,6 @@ kotlin {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // In-app QR scanning through Google Play services (no camera permission needed).
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }

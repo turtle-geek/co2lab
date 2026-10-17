@@ -8,6 +8,12 @@ object AgentStatus {
     data class State(
         val accessibility: Boolean = false,
         val connection: String = "Not connected",
+        val connected: Boolean = false,
+        /** Name the hub knows this device by (from hello.ok). */
+        val hubName: String? = null,
+        /** True when the hub rejected our token; the user must pair again. */
+        val authFailed: Boolean = false,
+        val task: String? = null,
         val lastMessage: String = "",
     )
 
