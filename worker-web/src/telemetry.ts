@@ -5,7 +5,7 @@ import { execFile } from "node:child_process";
 import si from "systeminformation";
 import type { Telemetry } from "@co2lab/shared";
 
-const TEMP_EVERY_MS = 30_000;
+const TEMP_EVERY_MS = 10_000;
 
 export class TelemetrySampler {
   private latest: Telemetry = { batteryPct: null, charging: null, tempC: null, cpuPct: null };

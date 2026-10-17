@@ -9,8 +9,9 @@ import { Approvals, Results } from "./components/Results";
 import { PairDialog, ShareDialog } from "./components/Dialogs";
 import { Expired, Login } from "./components/Login";
 import { Lab } from "./labSlot";
+import { ComputeTab } from "./compute/ComputeTab";
 
-type Tab = "devices" | "lab";
+type Tab = "devices" | "compute" | "lab";
 
 export function App({ backend, viewerToken }: { backend: Backend; viewerToken: string | null }) {
   const role = viewerToken ? "viewer" : "owner";
@@ -108,6 +109,9 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
           <button className={tab === "devices" ? "tab tab--on" : "tab"} onClick={() => setTab("devices")}>
             Devices
           </button>
+          <button className={tab === "compute" ? "tab tab--on" : "tab"} onClick={() => setTab("compute")}>
+            Compute
+          </button>
           <button className={tab === "lab" ? "tab tab--on" : "tab"} onClick={() => setTab("lab")}>
             Lab
           </button>
@@ -130,7 +134,11 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
         )}
       </header>
 
-      {tab === "lab" ? (
+      {tab === "compute" ? (
+        <main className="main">
+          <ComputeTab sets={state.computeSets} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
+        </main>
+      ) : tab === "lab" ? (
         <main className="main">
           <Lab experiments={state.experiments} defaultConfig={state.defaultConfig} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
         </main>

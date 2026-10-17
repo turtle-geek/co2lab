@@ -4,6 +4,7 @@ import type {
   AgentConfig,
   ApprovalView,
   DeviceView,
+  ComputeSetView,
   ExperimentView,
   HubToClient,
   PendingDevice,
@@ -38,6 +39,7 @@ export interface HubState {
   runs: RunView[];
   approvals: ApprovalView[];
   experiments: ExperimentView[];
+  computeSets: ComputeSetView[];
   defaultConfig: AgentConfig | null;
   frames: Record<string, LiveFrame>;
   steps: Record<string, LiveStep>;
@@ -59,6 +61,7 @@ export const initialState: HubState = {
   runs: [],
   approvals: [],
   experiments: [],
+  computeSets: [],
   defaultConfig: null,
   frames: {},
   steps: {},
@@ -91,6 +94,7 @@ export function reduce(state: HubState, msg: Action): HubState {
         runs: msg.runs,
         approvals: msg.approvals,
         experiments: msg.experiments,
+        computeSets: msg.computeSets ?? [],
         defaultConfig: msg.defaultConfig,
       };
     case "device.update": {
@@ -140,6 +144,8 @@ export function reduce(state: HubState, msg: Action): HubState {
       return { ...state, approvals: upsert(state.approvals, msg.approval) };
     case "approval.resolved":
       return { ...state, approvals: state.approvals.filter((a) => a.id !== msg.approvalId) };
+    case "compute.update":
+      return { ...state, computeSets: upsert(state.computeSets, { ...msg.set }) };
     case "research.update":
       return { ...state, experiments: upsert(state.experiments, msg.experiment) };
     case "error":

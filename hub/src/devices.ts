@@ -4,8 +4,7 @@
 import {
   BATTERY_REST_BELOW_PCT,
   OFFLINE_AFTER_MS,
-  TEMP_PAUSE_AT_C,
-  TEMP_RESUME_BELOW_C,
+  tempLimits,
   type Capability,
   type DeviceState,
   type DeviceView,
@@ -60,7 +59,7 @@ function noteFor(d: LiveDevice, state: DeviceState): string | null {
     case "error":
       return d.errorNote;
     case "hot":
-      return `${d.rec.name} is hot (${d.telemetry?.tempC ?? "?"} °C); paused until it cools below ${TEMP_RESUME_BELOW_C} °C`;
+      return `${d.rec.name} is hot (${d.telemetry?.tempC ?? "?"} °C); paused until it cools below ${tempLimits(d.rec.kind).resumeBelowC} °C`;
     case "resting":
       return `plug in ${d.rec.name}`;
     case "revoked":
@@ -155,8 +154,9 @@ export class DeviceRegistry {
   applyTelemetry(d: LiveDevice, t: Telemetry) {
     d.telemetry = t;
     if (t.tempC !== null) {
-      if (t.tempC >= TEMP_PAUSE_AT_C) d.hot = true;
-      else if (d.hot && t.tempC < TEMP_RESUME_BELOW_C) d.hot = false;
+      const lim = tempLimits(d.rec.kind);
+      if (t.tempC >= lim.pauseAtC) d.hot = true;
+      else if (d.hot && t.tempC < lim.resumeBelowC) d.hot = false;
     }
   }
 

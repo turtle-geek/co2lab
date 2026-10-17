@@ -30,10 +30,37 @@ export const DEFAULT_ASPECTS: AspectSpec[] = [
   { name: "content", seeds: ["not enough content", "lots to do", "gets boring after a few hours", "new updates and content"] },
 ];
 
-/** What each split strategy does. The Lab compares these; the owner's feedback can change them. */
-export const STRATEGIES: Record<SplitStrategy, { batch: number; maxThreads: number; pauseAtC: number; resumeBelowC: number; shrinkAtC: number | null; pluggedInOnly: boolean; describe: string }> = {
-  fast: { batch: 120, maxThreads: 8, pauseAtC: 42, resumeBelowC: 38, shrinkAtC: null, pluggedInOnly: false, describe: "big batches, all cores, pause only at 42 °C" },
-  eco: { batch: 40, maxThreads: 2, pauseAtC: 38, resumeBelowC: 34, shrinkAtC: 35, pluggedInOnly: true, describe: "small batches, 2 threads, halve batches from 35 °C, pause at 38 °C, plugged-in only" },
+interface TempRule {
+  pauseAtC: number;
+  resumeBelowC: number;
+  shrinkAtC: number | null;
+}
+
+/**
+ * What each split strategy does. The Lab compares these; the owner's feedback can change them.
+ * Temperatures differ by sensor: computers report the CPU thermal zone (idles ~45-55 °C),
+ * Android reports its battery (idles ~25-30 °C), so each strategy has a rule for each.
+ */
+export const STRATEGIES: Record<
+  SplitStrategy,
+  { batch: number; maxThreads: number; cpu: TempRule; battery: TempRule; pluggedInOnly: boolean; describe: string }
+> = {
+  fast: {
+    batch: 120,
+    maxThreads: 8,
+    cpu: { pauseAtC: 90, resumeBelowC: 80, shrinkAtC: null },
+    battery: { pauseAtC: 42, resumeBelowC: 38, shrinkAtC: null },
+    pluggedInOnly: false,
+    describe: "big batches, up to 8 threads, pause only at the safety limit (CPU 90 °C, phone battery 42 °C)",
+  },
+  eco: {
+    batch: 40,
+    maxThreads: 2,
+    cpu: { pauseAtC: 80, resumeBelowC: 72, shrinkAtC: 70 },
+    battery: { pauseAtC: 38, resumeBelowC: 34, shrinkAtC: 35 },
+    pluggedInOnly: true,
+    describe: "small batches, 2 threads, halve batches when warm (CPU 70 °C, phone 35 °C), pause at CPU 80 °C / phone 38 °C, plugged-in only",
+  },
 };
 
 const JOB_TIMEOUT_MS = 3 * 60_000;
@@ -276,7 +303,8 @@ export class ComputeManager {
    * can show why a device slowed down or stopped.
    */
   private feedback(s: JobSet, d: LiveDevice, st: DeviceStats, cores: number): { pause: string } | { batch: number; threads: number } {
-    const rule = STRATEGIES[s.view.strategy];
+    const strat = STRATEGIES[s.view.strategy];
+    const rule = { ...(d.rec.kind === "android" ? strat.battery : strat.cpu), pluggedInOnly: strat.pluggedInOnly, batch: strat.batch, maxThreads: strat.maxThreads };
     const t = d.telemetry;
     const temp = t?.tempC ?? null;
     let pause: string | null = null;

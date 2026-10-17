@@ -30,7 +30,8 @@ await build({
   target: "node22",
   // The worker imports "playwright"; the bundle ships the smaller playwright-core (same API, no test runner).
   alias: { playwright: "playwright-core" },
-  external: ["playwright-core", "bufferutil", "utf-8-validate", "osx-temperature-sensor"],
+  // The model runtime (native onnxruntime) is installed on first compute job, see src/compute/runtime.ts.
+  external: ["playwright-core", "bufferutil", "utf-8-validate", "osx-temperature-sensor", "@huggingface/transformers"],
   // CommonJS dependencies call require(); give the ESM bundle a real one.
   banner: { js: 'import { createRequire as __cr } from "node:module"; const require = __cr(import.meta.url);' },
   legalComments: "none",

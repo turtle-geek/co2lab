@@ -4,6 +4,7 @@
 // Other flags: --device-file <path>, --headless / --headed, --evidence-images, --pair-only, --hub <url>, --name <name>
 
 import { existsSync, renameSync } from "node:fs";
+import { cpus } from "node:os";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { HEARTBEAT_MS, type HubToDevice } from "@co2lab/shared";
 import { parseArgs, deviceFilePath, readDeviceFile, hubUrlFromEnv, log } from "./config.js";
@@ -13,6 +14,7 @@ import { TelemetrySampler } from "./telemetry.js";
 import { HubClient } from "./hub-client.js";
 import { WebTask, VIEWPORT } from "./web-task.js";
 import { blankHtml } from "./reader-view.js";
+import { runEmbedJob } from "./compute/embed.js";
 
 /** The hub rejected this device's token; the startup loop stops on this code instead of retrying. */
 const EXIT_REJECTED = 3;
@@ -86,10 +88,65 @@ const hub = new HubClient({
 });
 hub.connect();
 
+// ---------- Compute jobs: pull a batch whenever idle (SPEC §4.7) ----------
+// Web subtasks come first: no pulling while one runs. The hub's answer sets the pace
+// (job.none says when to ask again, e.g. while the feedback loop has this device paused).
+const computeEnabled = !args.has("no-compute");
+let computing = false;
+let pullTimer: NodeJS.Timeout | null = null;
+
+function schedulePull(ms: number): void {
+  if (!computeEnabled || shuttingDown) return;
+  if (pullTimer) clearTimeout(pullTimer);
+  pullTimer = setTimeout(() => {
+    pullTimer = null;
+    if (computing || tasks.size) return schedulePull(3_000);
+    if (!hub.send({ type: "job.pull", kinds: ["embed"], cores: cpus().length })) schedulePull(3_000);
+  }, ms);
+}
+
+async function runJob(msg: Extract<HubToDevice, { type: "job.assign" }>): Promise<void> {
+  computing = true;
+  const started = Date.now();
+  log(`[job ${msg.jobId.slice(-6)}] ${msg.items.length} reviews, ${msg.threads} thread(s)`);
+  try {
+    const r = await runEmbedJob(msg);
+    const t = telemetry.current;
+    hub.send({
+      type: "job.result",
+      jobId: msg.jobId,
+      durationMs: Date.now() - started,
+      sentences: r.sentences,
+      threads: msg.threads,
+      cpuPct: t.cpuPct,
+      tempC: t.tempC,
+      counts: r.counts,
+    });
+    log(`[job ${msg.jobId.slice(-6)}] ${r.sentences} sentences in ${((Date.now() - started) / 1000).toFixed(1)} s${t.tempC !== null ? `, ${t.tempC} °C` : ""}`);
+  } catch (e) {
+    log(`[job ${msg.jobId.slice(-6)}] failed: ${(e as Error).message}`);
+    hub.send({ type: "job.failed", jobId: msg.jobId, reason: (e as Error).message.slice(0, 300) });
+  } finally {
+    computing = false;
+    schedulePull(0);
+  }
+}
+
 function onMessage(msg: HubToDevice): void {
   switch (msg.type) {
     case "hello.ok":
       void idlePage.setContent(blankHtml(`${msg.name} · connected · waiting for a web subtask`)).catch(() => undefined);
+      schedulePull(1_000);
+      return;
+    case "job.assign":
+      if (computing) {
+        hub.send({ type: "job.failed", jobId: msg.jobId, reason: "already running a batch" });
+        return;
+      }
+      void runJob(msg);
+      return;
+    case "job.none":
+      schedulePull(msg.retryMs);
       return;
     case "subtask.assign": {
       if (tasks.has(msg.subtaskId)) return; // duplicate assign after a reconnect
