@@ -22,6 +22,7 @@ import { DeviceRegistry, type LiveDevice } from "./devices.js";
 import { log } from "./log.js";
 import { Pairing, type RedeemError } from "./pairing.js";
 import type { Repository } from "./repo/index.js";
+import type { CatalogDevice } from "./agent/agent.js";
 import { ComputeManager, UserError as ComputeUserError } from "./compute/manager.js";
 import { ResearchLab, UserError, researchStoreFor } from "./research/index.js";
 import { DEFAULT_CONFIG, RunManager } from "./runs.js";
@@ -58,12 +59,15 @@ export class Hub {
       sendToDevice: (d, m) => this.sendToDevice(d, m),
       deviceChanged: (d) => this.publishDevice(d),
       onEvidence: (...a) => this.research.onEvidence(...a),
+      catalog: () => this.catalog(),
+      compute: () => this.compute,
     });
     this.compute = new ComputeManager({
       devices: this.devices,
       broadcast: (m) => this.broadcast(m),
       sendToDevice: (d, m) => this.sendToDevice(d, m),
       deviceChanged: (d) => this.publishDevice(d),
+      onSetEnded: (set) => this.runs.onComputeSetEnded(set),
     });
     this.research = new ResearchLab({
       store: researchStoreFor(repo),
@@ -136,6 +140,17 @@ export class Hub {
       computeSets: this.compute.views(),
       defaultConfig: DEFAULT_CONFIG,
     };
+  }
+
+  /** What the general planner sees: online devices, their state and what they share (SPEC §4.8). */
+  catalog(): CatalogDevice[] {
+    return this.devices
+      .active()
+      .filter((d) => d.online)
+      .map((d) => {
+        const v = this.devices.view(d);
+        return { id: d.rec.id, name: d.rec.name, kind: d.rec.kind, state: v.state, capabilities: d.rec.capabilities, context: d.context };
+      });
   }
 
   deviceViews(): DeviceView[] {
@@ -310,7 +325,11 @@ export class Hub {
         this.runs.schedule();
       }
       try {
-        if (msg.type === "job.pull" || msg.type === "job.result" || msg.type === "job.failed") this.compute.onDeviceMessage(d, msg);
+        if (msg.type === "device.context") {
+          d.context = msg.items;
+          log.info(`context from ${d.rec.name}: ${msg.items.length} item(s)`);
+          this.publishDevice(d);
+        } else if (msg.type === "job.pull" || msg.type === "job.result" || msg.type === "job.failed") this.compute.onDeviceMessage(d, msg);
         else this.runs.onDeviceMessage(d, msg);
       } catch (e) {
         log.error(`device message ${msg.type}`, e);

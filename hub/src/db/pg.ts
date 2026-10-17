@@ -159,12 +159,13 @@ export class PgRepository implements Repository {
       r.error,
       ts(r.createdAt),
       ts(r.finishedAt),
+      r.answer ? JSON.stringify(r.answer) : null,
     ];
     return this.enqueue(`run:${r.id}`, async () => {
       await this.q(
-        `insert into run (id, client_run_id, prompt, status, config, ranked, burn, error, created_at, finished_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         on conflict (id) do update set status = $4, config = $5, ranked = $6, burn = $7, error = $8, finished_at = $10`,
+        `insert into run (id, client_run_id, prompt, status, config, ranked, burn, error, created_at, finished_at, answer)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         on conflict (id) do update set status = $4, config = $5, ranked = $6, burn = $7, error = $8, finished_at = $10, answer = $11`,
         v,
       );
     });
@@ -297,6 +298,7 @@ function toRun(r: Record<string, any>): RunRecord {
     status: r.status,
     config: r.config,
     ranked: r.ranked,
+    answer: r.answer ?? null,
     burn: r.burn,
     error: r.error,
     createdAt: ms(r.created_at)!,

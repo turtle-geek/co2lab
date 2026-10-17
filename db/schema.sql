@@ -198,3 +198,6 @@ alter table trial add column if not exists misreads jsonb not null default '[]';
 alter table trial add column if not exists error text;
 
 alter table finding add column if not exists markdown text;
+
+-- General agent (P4): composed answer for non-deal requests.
+alter table run add column if not exists answer jsonb;

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type {
   AgentConfig,
   Capability,
+  ComputeSetView,
   Deal,
   DealSource,
   DeviceToHub,
@@ -32,6 +33,18 @@ import {
 } from "./gemini.js";
 import { log } from "./log.js";
 import type { DealRecord, Repository, RunRecord, StepRow, SubtaskRecord } from "./repo/index.js";
+import {
+  chooseWebAction,
+  composeAnswer,
+  extractFindings,
+  planRequest,
+  type AnswerSection,
+  type CatalogDevice,
+  type Findings,
+  type Plan,
+  type PlannedTask,
+} from "./agent/agent.js";
+import type { ComputeManager } from "./compute/manager.js";
 
 /** A queued subtask fails if no device can take it for this long. */
 export const QUEUE_TIMEOUT_MS = 90_000;
@@ -79,7 +92,22 @@ export interface RunDeps {
   deviceChanged: (d: LiveDevice) => void;
   /** Research Mode keeps the screenshots and screen text of capture runs (hub/src/research/). */
   onEvidence?: (subtaskId: string, deviceId: string | null, refs: (string | null)[], text: string | null) => void;
+  /** General agent (SPEC §4.8): online devices with their context, and the compute queue for review tasks. */
+  catalog?: () => CatalogDevice[];
+  compute?: () => ComputeManager;
 }
+
+/** A general-agent task that is not a deal recipe. */
+interface GeneralTask {
+  tool: "web" | "reviews";
+  startUrl: string | null;
+  setIds: string[];
+  findings: Findings | null;
+  summary: string | null;
+}
+
+const WEB_AGENT_MAX_STEPS = 15;
+const REVIEWS_PER_GAME = 1000;
 
 export class RunManager {
   private runs = new Map<string, RunRecord>();
@@ -89,6 +117,9 @@ export class RunManager {
   private phase = new Map<string, Phase>();
   private queuedAt = new Map<string, number>();
   private runCreating = new Map<string, Promise<RunView>>();
+  private general = new Map<string, GeneralTask>();
+  /** Runs planned by the general agent (not deal-only); wave 2 = follow-up already planned. */
+  private agentRuns = new Map<string, { wave: 1 | 2 }>();
 
   constructor(private deps: RunDeps) {}
 
@@ -124,8 +155,10 @@ export class RunManager {
         attempt: s.attempt,
         error: s.error,
         dealCount: s.dealCount,
+        findings: this.general.get(s.id)?.summary ?? null,
       })),
       ranked: r.ranked,
+      answer: r.answer ?? null,
       burn: r.burn,
       error: r.error,
       createdAt: r.createdAt,
@@ -228,7 +261,124 @@ export class RunManager {
     }
   }
 
+  /**
+   * General agent (SPEC §4.8): Gemini plans from the request and the device catalog. A plan that is
+   * only deal recipes runs the rehearsed deal path (rank at the end); anything else becomes an agent
+   * run (findings per task, one optional follow-up wave, composed answer). If the agent planner itself
+   * errors, the original deal planner below takes over, as before.
+   */
   private async plan(run: RunRecord) {
+    if (!this.deps.catalog) return this.planDeals(run);
+    let plan: Plan;
+    try {
+      plan = await planRequest({ prompt: run.prompt, devices: this.deps.catalog(), onUsage: this.usageSink(run.id, null, "plan") });
+    } catch (e) {
+      log.warn(`run ${run.id}: agent planner failed (${errMsg(e)}); using the deal planner`);
+      return this.planDeals(run);
+    }
+    const { deals, general, dropped } = this.validate(plan.tasks);
+    this.saveStep({
+      time: Date.now(),
+      runId: run.id,
+      subtaskId: null,
+      deviceId: null,
+      kind: "plan",
+      detail: { planner: "agent", reasoning: plan.reasoning, tasks: plan.tasks, dropped, cannotDo: plan.cannotDo },
+      tokensIn: 0,
+      tokensOut: 0,
+      model: null,
+    });
+    log.info(`run ${run.id} agent plan: ${plan.reasoning.slice(0, 200)}`);
+    if (!deals.length && !general.length)
+      return this.failRun(run, plan.cannotDo ?? (dropped.length ? `no online device can ${dropped.join("; ")}` : "the planner found nothing the devices can do"));
+    if (!general.length) return this.startSubtasks(run, deals, "agent (deals)");
+    this.agentRuns.set(run.id, { wave: 1 });
+    this.addGeneral(run, general);
+    if (deals.length) this.startSubtasks(run, deals, "agent");
+    else {
+      run.status = "running";
+      this.saveRun(run);
+      this.publish(run.id);
+      this.schedule();
+      this.checkRunComplete(run.id);
+    }
+  }
+
+  /** Keeps only tasks some online device can run; returns why the others were dropped. */
+  private validate(tasks: PlannedTask[]) {
+    const deals: { id: PlanId; goal: string }[] = [];
+    const general: PlannedTask[] = [];
+    const dropped: string[] = [];
+    const seen = new Set<string>();
+    const computeDevice = this.deps.devices.active().some((d) => d.online && d.rec.kind !== "android");
+    for (const t of tasks) {
+      if (t.tool === "deals") {
+        if (!t.source || seen.has(t.source)) continue;
+        seen.add(t.source);
+        if (this.deps.devices.anyWith(PLAN_INFO[t.source].capability)) deals.push({ id: t.source, goal: t.goal });
+        else dropped.push(`run ${t.source}`);
+      } else if (t.tool === "web") {
+        if (this.deps.devices.anyWith("web")) general.push(t);
+        else dropped.push(`browse the web (${t.goal.slice(0, 60)})`);
+      } else if (t.steamAppIds.length && computeDevice && this.deps.compute) general.push(t);
+      else dropped.push("analyze reviews (no app IDs or no computer online)");
+    }
+    return { deals, general, dropped };
+  }
+
+  private addGeneral(run: RunRecord, tasks: PlannedTask[]) {
+    const now = Date.now();
+    for (const t of tasks) {
+      const isWeb = t.tool === "web";
+      const s: SubtaskRecord = {
+        id: ulid(),
+        runId: run.id,
+        capability: "web",
+        source: "agent",
+        label: isWeb ? `Web: ${hostLabel(t.startUrl) ?? t.goal.slice(0, 40)}` : `Review analysis (${t.steamAppIds.length} game${t.steamAppIds.length === 1 ? "" : "s"})`,
+        goal: t.goal,
+        // Review analysis runs as compute batches, never through the subtask scheduler.
+        status: isWeb ? "queued" : "running",
+        deviceId: null,
+        attempt: 1,
+        error: null,
+        dealCount: 0,
+        createdAt: now,
+        startedAt: isWeb ? null : now,
+        finishedAt: null,
+      };
+      const g: GeneralTask = { tool: isWeb ? "web" : "reviews", startUrl: validUrl(t.startUrl), setIds: [], findings: null, summary: null };
+      this.subtasks.set(s.id, s);
+      this.byRun.get(run.id)!.push(s.id);
+      this.general.set(s.id, g);
+      if (isWeb) this.queuedAt.set(s.id, now);
+      else for (const appId of t.steamAppIds) g.setIds.push(this.deps.compute!().queue(appId, "fast", REVIEWS_PER_GAME));
+      this.saveSubtask(s);
+    }
+  }
+
+  /** From ComputeManager: a review job set ended; finish the review task once all its games are done. */
+  onComputeSetEnded(set: ComputeSetView) {
+    for (const [id, g] of this.general) {
+      if (g.tool !== "reviews" || !g.setIds.includes(set.id)) continue;
+      const s = this.subtasks.get(id);
+      if (!s || s.status !== "running") continue;
+      const sets = g.setIds.map((sid) => this.deps.compute!().get(sid)).filter((v): v is ComputeSetView => !!v);
+      if (sets.some((v) => v.status === "running" || v.status === "fetching")) continue;
+      const ok = sets.filter((v) => v.status === "done");
+      g.summary = ok.length ? `Analyzed ${ok.reduce((n, v) => n + v.sentences, 0)} review sentences for ${ok.map((v) => v.title).join(", ")}` : null;
+      g.findings = {
+        summary: g.summary ?? "",
+        items: sets.map((v) => ({ title: v.title, detail: reviewSummary(v), url: `https://store.steampowered.com/app/${v.appId}/`, steamAppId: v.appId })),
+      };
+      s.dealCount = ok.length;
+      if (ok.length) this.finishSubtask(s, "done", null);
+      else this.finishSubtask(s, "failed", sets.map((v) => v.error ?? v.status).join("; ") || "review analysis failed");
+    }
+  }
+
+  /** Deal-only planner: picks from the fixed sources (the original path, also the agent's fallback). */
+  private async planDeals(run: RunRecord) {
     const available = PLAN_IDS.filter((id) => this.deps.devices.anyWith(PLAN_INFO[id].capability));
     let chosen: { id: PlanId; goal: string }[];
     let planNote: string;
@@ -361,6 +511,9 @@ export class RunManager {
       capability: s.capability,
       goal: s.goal,
       config: run.config,
+      ...(this.general.get(s.id)?.tool === "web"
+        ? { agent: { startUrl: this.general.get(s.id)!.startUrl, maxSteps: WEB_AGENT_MAX_STEPS } }
+        : {}),
     });
     log.info(`assign ${s.label} (${s.id}, attempt ${s.attempt}) -> ${d.rec.name}`);
     this.deps.deviceChanged(d);
@@ -503,7 +656,17 @@ export class RunManager {
   private async proxy(d: LiveDevice, s: SubtaskRecord, msg: Extract<DeviceToHub, { type: "proxy.request" }>) {
     const run = this.runs.get(s.runId)!;
     try {
-      const { action, why } = await chooseProxyAction({
+      const web = this.general.get(s.id)?.tool === "web" && msg.page;
+      const { action, why } = web
+        ? await chooseWebAction({
+            goal: msg.goal,
+            page: msg.page!,
+            screenshot: msg.screenshot,
+            nodes: msg.nodes,
+            history: msg.history,
+            onUsage: this.usageSink(s.runId, s, "proxy"),
+          })
+        : await chooseProxyAction({
         goal: msg.goal,
         screenshot: msg.screenshot,
         nodes: msg.nodes,
@@ -528,11 +691,26 @@ export class RunManager {
 
     const refs = await this.saveImages(s, evidence.images);
     this.deps.onEvidence?.(s.id, s.deviceId, refs, evidence.text);
+    const g = this.general.get(s.id);
+    if (g) {
+      this.hubStep(s, "extract", "Reading what the browser found…");
+      try {
+        g.findings = await extractFindings({ goal: s.goal, text: evidence.text ?? "", images: evidence.images, onUsage: this.usageSink(s.runId, s, "extract") });
+      } catch (e) {
+        return this.finishSubtask(s, "failed", `could not read the findings: ${errMsg(e)}`);
+      }
+      g.summary = g.findings.summary;
+      s.dealCount = g.findings.items.length;
+      this.hubStep(s, "extract", g.findings.items.length ? `Found ${g.findings.items.length} item(s)` : "Nothing concrete found");
+      return this.finishSubtask(s, "done", null);
+    }
+    if (s.source === "agent") return this.finishSubtask(s, "failed", "agent task without a plan (hub restarted?)");
+    const source = s.source;
     this.hubStep(s, "extract", `Reading ${s.label} deals with Gemini…`);
     let deals: Deal[];
     try {
       deals = await extractDeals({
-        source: s.source,
+        source,
         label: s.label,
         goal: s.goal,
         images: evidence.images,
@@ -600,7 +778,74 @@ export class RunManager {
     if (done.length === 0) {
       return this.failRun(run, subs.map((s) => `${s.label}: ${s.error ?? s.status}`).join("; ") || "no subtasks");
     }
+    if (this.agentRuns.has(run.id)) {
+      void this.finishAgent(run).catch((e) => this.failRun(run, `answer crashed: ${errMsg(e)}`));
+      return;
+    }
     void this.merge(run).catch((e) => this.failRun(run, `merge crashed: ${errMsg(e)}`));
+  }
+
+  /** What every finished task found, as numbered sections for the planner and the answer. */
+  private async sections(run: RunRecord): Promise<AnswerSection[]> {
+    const out: AnswerSection[] = [];
+    const deals = await this.deps.repo.listDeals(run.id);
+    for (const s of this.subtasksOf(run.id)) {
+      const g = this.general.get(s.id);
+      if (s.status !== "done") {
+        out.push({ source: s.label, deviceId: s.deviceId, text: `(failed: ${s.error ?? s.status})` });
+      } else if (g?.findings) {
+        const items = g.findings.items.map((i) => `- ${i.title}: ${i.detail}${i.url ? ` (${i.url})` : ""}${i.steamAppId ? ` [Steam app ${i.steamAppId}]` : ""}`);
+        out.push({ source: g.tool === "web" ? s.label.replace(/^Web: /, "") : "review analysis", deviceId: s.deviceId, text: `${g.findings.summary}\n${items.join("\n")}` });
+      } else if (!g) {
+        const mine = deals.filter((d) => d.subtaskId === s.id);
+        out.push({
+          source: s.label,
+          deviceId: s.deviceId,
+          text: mine.length
+            ? mine.map((d) => `- ${d.title} | ${d.priceText ?? "-"} | ${d.conditions ?? ""} ${d.expiresText ? `| expires ${d.expiresText}` : ""}`).join("\n")
+            : "No deals found.",
+        });
+      }
+    }
+    return out;
+  }
+
+  private async finishAgent(run: RunRecord) {
+    const state = this.agentRuns.get(run.id)!;
+    const sections = await this.sections(run);
+    if (state.wave === 1 && this.deps.catalog) {
+      state.wave = 2;
+      try {
+        const plan = await planRequest({
+          prompt: run.prompt,
+          devices: this.deps.catalog(),
+          findings: sections.map((s, i) => `[${i}] ${s.source}:\n${s.text}`).join("\n\n").slice(0, 20_000),
+          onUsage: this.usageSink(run.id, null, "plan"),
+        });
+        const { deals, general } = this.validate(plan.tasks);
+        if (deals.length || general.length) {
+          log.info(`run ${run.id} follow-up: ${plan.reasoning.slice(0, 200)}`);
+          this.saveStep({ time: Date.now(), runId: run.id, subtaskId: null, deviceId: null, kind: "plan", detail: { planner: "agent follow-up", reasoning: plan.reasoning, tasks: plan.tasks }, tokensIn: 0, tokensOut: 0, model: null });
+          this.addGeneral(run, general);
+          if (deals.length) this.startSubtasks(run, deals, "agent follow-up");
+          this.publish(run.id);
+          this.schedule();
+          this.checkRunComplete(run.id);
+          return;
+        }
+      } catch (e) {
+        log.warn(`run ${run.id}: follow-up planner failed (${errMsg(e)}); answering with what was found`);
+      }
+    }
+    run.status = "merging";
+    this.saveRun(run);
+    this.publish(run.id);
+    run.answer = await composeAnswer({ prompt: run.prompt, sections, onUsage: this.usageSink(run.id, null, "merge") });
+    run.status = "done";
+    run.finishedAt = Date.now();
+    this.saveRun(run);
+    log.info(`run ${run.id} answered (${run.answer.items.length} item(s), ${run.burn.tokensIn + run.burn.tokensOut} tokens)`);
+    this.publish(run.id);
   }
 
   private async merge(run: RunRecord) {
@@ -668,4 +913,29 @@ export class RunManager {
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+function validUrl(u: string | null): string | null {
+  if (!u) return null;
+  try {
+    const url = new URL(u);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function hostLabel(u: string | null): string | null {
+  const v = validUrl(u);
+  return v ? new URL(v).host.replace(/^www\./, "") : null;
+}
+
+/** One line per aspect: share of negative sentences, by playtime, for the planner and the answer. */
+function reviewSummary(v: ComputeSetView): string {
+  if (v.status !== "done") return `review analysis ${v.status}${v.error ? `: ${v.error}` : ""}`;
+  const pct = (p: number, n: number) => (p + n ? `${Math.round((100 * n) / (p + n))} % negative` : "no mentions");
+  const aspects = [...v.aspects]
+    .sort((a, b) => b.pos + b.neg - (a.pos + a.neg))
+    .map((a) => `${a.aspect}: ${a.pos + a.neg} mentions, ${pct(a.pos, a.neg)} (30 h+: ${pct(a.byPlaytime.over30h.pos, a.byPlaytime.over30h.neg)})`);
+  return `${v.reviews.kept} real reviews of ${v.reviews.fetched}${v.reviews.bombDays.length ? `, review-bomb days ${v.reviews.bombDays.join(", ")}` : ""}. ${aspects.join("; ")}`;
 }

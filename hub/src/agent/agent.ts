@@ -1,0 +1,254 @@
+// General agent (SPEC §4.8): Gemini decides WHAT to do from the request and what the devices
+// actually have; the scheduler (code) decides WHO does it. Every output is structured and
+// validated against the device catalog, so the planner cannot invent a device or an app.
+
+import type { ContextItem, DeviceKind, ProxyAction, RunAnswer, UiNode } from "@co2lab/shared";
+import { ProxyAction as ProxyActionSchema } from "@co2lab/shared";
+import { z } from "zod";
+import { callJson, PLAN_IDS, type PlanId, type UsageSink } from "../gemini.js";
+
+export interface CatalogDevice {
+  id: string;
+  name: string;
+  kind: DeviceKind;
+  state: string;
+  capabilities: string[];
+  context: ContextItem[];
+}
+
+export type Tool = "deals" | "web" | "reviews";
+
+export interface PlannedTask {
+  tool: Tool;
+  /** deals: which recipe source. */
+  source: PlanId | null;
+  goal: string;
+  startUrl: string | null;
+  steamAppIds: number[];
+}
+
+export interface Plan {
+  reasoning: string;
+  tasks: PlannedTask[];
+  cannotDo: string | null;
+}
+
+const TaskSchema = z.object({
+  tool: z.enum(["deals", "web", "reviews"]),
+  source: z.enum(PLAN_IDS).nullable(),
+  goal: z.string().min(3).max(400),
+  startUrl: z.string().nullable(),
+  steamAppIds: z.array(z.number().int().positive()).max(6),
+});
+const PlanSchema = z.object({
+  reasoning: z.string().max(800),
+  tasks: z.array(TaskSchema).max(8),
+  cannotDo: z.string().max(400).nullable(),
+});
+
+function catalogText(devices: CatalogDevice[]): string {
+  if (!devices.length) return "(no devices online)";
+  return devices
+    .map((d) => {
+      const games = d.context.filter((c) => c.kind === "steam_game");
+      const apps = d.context.filter((c) => c.kind === "installed_app");
+      const browser = d.context.find((c) => c.kind === "browser");
+      return [
+        `- ${d.name} (${d.kind}, ${d.state}); capabilities: ${d.capabilities.join(", ")}`,
+        browser ? `  browser: ${browser.label}` : "",
+        apps.length ? `  installed apps: ${apps.slice(0, 150).map((a) => a.label).join(", ")}` : "",
+        games.length ? `  installed Steam games (${games.length}): ${games.slice(0, 200).map((g) => `${g.label} [${g.id}]`).join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    })
+    .join("\n");
+}
+
+const TOOLS_TEXT =
+  "Tools (each task uses exactly one):\n" +
+  "- deals: collect current offers from one built-in source (source = app:tims, app:mcdonalds, app:popeyes need an Android device with that capability; web:redflagdeals needs a web device). Use for restaurant / food deal requests.\n" +
+  "- web: a browser agent on a laptop or the Cloud worker visits sites and reads them to reach the goal. Give a concrete goal and, when you know it, a startUrl (e.g. a Steam store search URL https://store.steampowered.com/search/?term=...&maxprice=20 or a site's search page). One task per site or sub-question; tasks run in parallel on different devices.\n" +
+  "- reviews: analyze Steam user reviews on the devices (topics like grind, story, performance, multiplayer, value, content; positive vs negative, by playtime). Needs Steam app IDs (numbers). Use only when you already know the IDs.\n";
+
+export async function planRequest(o: {
+  prompt: string;
+  devices: CatalogDevice[];
+  /** Wave 2: what wave 1 found. */
+  findings?: string;
+  onUsage: UsageSink;
+}): Promise<Plan> {
+  const followUp = o.findings !== undefined;
+  return callJson({
+    tier: "flash",
+    label: followUp ? "agent follow-up" : "agent planner",
+    schema: PlanSchema,
+    onUsage: o.onUsage,
+    system:
+      "You are the planner of Co2lab, a team of the owner's own old devices (phone, laptops) plus a Cloud worker. " +
+      "Decide what work answers the owner's request, using only the tools and devices listed. Prefer what the devices " +
+      "uniquely have (signed-in apps, installed games) and say so in reasoning. Keep it small: 1-4 tasks usually. " +
+      "Never plan payments, orders, sign-ins, messages or posts. Set fields a tool does not use to null / []. " +
+      (followUp
+        ? "This is the follow-up round: you see what the first tasks found. Add tasks only if they clearly improve the answer " +
+          "(for example review analysis for the candidate games found, using their Steam app IDs). Otherwise return no tasks."
+        : "If no listed device can do anything useful for the request, return no tasks and explain in cannotDo."),
+    parts: [
+      {
+        text:
+          `${TOOLS_TEXT}\nDevices online:\n${catalogText(o.devices)}\n\nOwner's request: ${JSON.stringify(o.prompt)}` +
+          (followUp ? `\n\nWhat the first tasks found:\n${o.findings}` : ""),
+      },
+    ],
+  });
+}
+
+// ---------- Findings from a web task's evidence ----------
+
+const FindingsSchema = z.object({
+  summary: z.string().max(800),
+  items: z
+    .array(
+      z.object({
+        title: z.string().max(200),
+        detail: z.string().max(400),
+        url: z.string().nullable(),
+        steamAppId: z.number().int().nullable(),
+      }),
+    )
+    .max(15),
+});
+export type Findings = z.infer<typeof FindingsSchema>;
+
+export async function extractFindings(o: { goal: string; text: string; images: string[]; onUsage: UsageSink }): Promise<Findings> {
+  return callJson({
+    tier: "flash",
+    label: "findings",
+    schema: FindingsSchema,
+    onUsage: o.onUsage,
+    system:
+      "Read what a browser agent saw and report what it found for its goal. Only use facts present in the text or screenshots; " +
+      "never invent prices, names or numbers. items: the concrete things found (products, games, offers, places) with the " +
+      "useful detail (price, discount, rating, review summary). steamAppId: the number in a store.steampowered.com/app/<id>/ URL when present.",
+    parts: [
+      { text: `Goal: ${o.goal}\n\nPage text (by URL):\n${o.text.slice(0, 28_000)}` },
+      ...o.images.slice(-2).map((data) => ({ inlineData: { mimeType: "image/jpeg", data } })),
+    ],
+  });
+}
+
+// ---------- The browser agent's next action ----------
+
+const WebActionSchema = z.object({
+  why: z.string(),
+  kind: z.enum(["tapNode", "type", "open", "scroll", "back", "wait", "done", "fail"]),
+  nodeId: z.string().nullable(),
+  text: z.string().nullable(),
+  submit: z.boolean().nullable(),
+  url: z.string().nullable(),
+  direction: z.enum(["up", "down"]).nullable(),
+  reason: z.string().nullable(),
+});
+
+export async function chooseWebAction(o: {
+  goal: string;
+  page: { url: string; title: string; text: string };
+  screenshot: string;
+  nodes: UiNode[];
+  history: string[];
+  onUsage: UsageSink;
+}): Promise<{ action: ProxyAction; why: string }> {
+  const nodes = o.nodes.map((n) => `${n.id} | ${n.viewId ?? ""} | ${n.text ?? ""} | ${n.desc ?? ""}`).join("\n");
+  const r = await callJson({
+    tier: "flash",
+    label: "web agent",
+    schema: WebActionSchema,
+    onUsage: o.onUsage,
+    system:
+      "You control a web browser, one action at a time, to reach the goal. Use the numbered elements: tapNode (click), " +
+      "type (fill an input; submit=true presses Enter), open (go to a URL you are sure of), scroll, back, wait. " +
+      "Return done as soon as the information the goal asks for is visible in the page text (the hub reads the pages you visited). " +
+      "Close cookie banners with the most privacy-preserving choice (reject / necessary only). Never sign in, enter personal data, " +
+      "buy, or post. If the goal needs any of that, or the site blocks you, return fail with the reason. Fill only the fields the kind needs.",
+    parts: [
+      {
+        text:
+          `Goal: ${o.goal}\nURL: ${o.page.url}\nTitle: ${o.page.title}\nActions so far: ${o.history.join(" -> ") || "none"}\n\n` +
+          `Elements (id | tag | text | details):\n${nodes || "(none)"}\n\nVisible text:\n${o.page.text.slice(0, 9_000)}`,
+      },
+      { inlineData: { mimeType: "image/jpeg", data: o.screenshot } },
+    ],
+  });
+  let raw: unknown;
+  switch (r.kind) {
+    case "tapNode":
+      raw = { kind: "tapNode", nodeId: r.nodeId };
+      break;
+    case "type":
+      raw = { kind: "type", nodeId: r.nodeId, text: r.text ?? "", submit: r.submit ?? true };
+      break;
+    case "open":
+      raw = { kind: "open", url: r.url };
+      break;
+    case "scroll":
+      raw = { kind: "scroll", direction: r.direction ?? "down" };
+      break;
+    case "wait":
+      raw = { kind: "wait", ms: 1500 };
+      break;
+    case "fail":
+      raw = { kind: "fail", reason: r.reason ?? r.why };
+      break;
+    default:
+      raw = { kind: r.kind };
+  }
+  const parsed = ProxyActionSchema.safeParse(raw);
+  if (!parsed.success) throw new Error(`web agent returned an incomplete ${r.kind} action`);
+  const action = parsed.data;
+  if ((action.kind === "tapNode" || action.kind === "type") && !o.nodes.some((n) => n.id === action.nodeId))
+    throw new Error(`web agent chose unknown element ${action.nodeId}`);
+  return { action, why: r.why };
+}
+
+// ---------- The final answer ----------
+
+export interface AnswerSection {
+  /** Shown as the item's source: "RedFlagDeals", "store.steampowered.com", "review analysis". */
+  source: string;
+  deviceId: string | null;
+  text: string;
+}
+
+const AnswerSchema = z.object({
+  text: z.string().max(2000),
+  items: z
+    .array(z.object({ title: z.string(), detail: z.string(), section: z.number().int().min(0), url: z.string().nullable() }))
+    .max(12),
+});
+
+export async function composeAnswer(o: { prompt: string; sections: AnswerSection[]; onUsage: UsageSink }): Promise<RunAnswer> {
+  const r = await callJson({
+    tier: "flash",
+    label: "answer",
+    schema: AnswerSchema,
+    onUsage: o.onUsage,
+    system:
+      "Answer the owner's request using only the findings below (each numbered section came from one device task). " +
+      "text: a short, direct answer (2-5 sentences) with the key numbers. items: the best concrete options, ranked, each " +
+      "with the section number it came from. If the findings do not answer the request, say exactly what is missing.",
+    parts: [
+      {
+        text:
+          `Request: ${JSON.stringify(o.prompt)}\n\n` +
+          o.sections.map((s, i) => `[${i}] from ${s.source}:\n${s.text.slice(0, 6_000)}`).join("\n\n"),
+      },
+    ],
+  });
+  return {
+    text: r.text,
+    items: r.items.map((it) => {
+      const s = o.sections[it.section];
+      return { title: it.title, detail: it.detail, source: s?.source ?? "?", deviceId: s?.deviceId ?? null, url: it.url };
+    }),
+  };
+}

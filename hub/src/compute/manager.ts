@@ -107,6 +107,8 @@ export interface ComputeDeps {
   broadcast: (msg: HubToClient) => void;
   sendToDevice: (d: LiveDevice, msg: HubToDevice) => void;
   deviceChanged: (d: LiveDevice) => void;
+  /** A job set ended (done, failed or cancelled); the general agent waits on this. */
+  onSetEnded?: (set: ComputeSetView) => void;
 }
 
 export class UserError extends Error {}
@@ -122,6 +124,19 @@ export class ComputeManager {
 
   private active(): JobSet | null {
     return this.sets.find((s) => s.view.status === "running" || s.view.status === "fetching") ?? null;
+  }
+
+  /** The oldest running set that still has batches to hand out (sets queue behind each other). */
+  private withWork(): JobSet | null {
+    return this.sets.find((s) => s.view.status === "running" && (s.cursor < s.items.length || s.retry.length > 0)) ?? null;
+  }
+
+  /** Steam fetches run one at a time (rate limit). */
+  private fetchChain: Promise<unknown> = Promise.resolve();
+
+  get(setId: string): ComputeSetView | null {
+    const s = this.sets.find((x) => x.view.id === setId);
+    return s ? this.snapshot(s) : null;
   }
 
   private snapshot(s: JobSet): ComputeSetView {
@@ -149,8 +164,14 @@ export class ComputeManager {
 
   // ---------- Owner commands ----------
 
+  /** Owner start from the Compute tab: one at a time. The general agent uses queue() instead. */
   async start(appId: number, strategy: SplitStrategy, maxReviews = 3000) {
     if (this.active()) throw new UserError("A compute job is already running; cancel it first");
+    return this.queue(appId, strategy, maxReviews);
+  }
+
+  /** Adds a job set behind any running ones; returns its id. */
+  queue(appId: number, strategy: SplitStrategy, maxReviews = 3000): string {
     const s: JobSet = {
       view: {
         id: ulid(),
@@ -180,7 +201,9 @@ export class ComputeManager {
     this.sets.push(s);
     this.decide(s, null, `Strategy "${strategy}": ${STRATEGIES[strategy].describe}`);
     this.publish(s);
-    void this.prepare(s, maxReviews).catch((e) => this.fail(s, (e as Error).message));
+    const p = this.fetchChain.then(() => this.prepare(s, maxReviews)).catch((e) => this.fail(s, (e as Error).message));
+    this.fetchChain = p;
+    return s.view.id;
   }
 
   cancel(setId: string) {
@@ -192,6 +215,7 @@ export class ComputeManager {
     s.view.finishedAt = Date.now();
     this.decide(s, null, "Cancelled by the owner");
     this.publish(s);
+    this.deps.onSetEnded?.(this.snapshot(s));
   }
 
   private async prepare(s: JobSet, maxReviews: number) {
@@ -222,6 +246,7 @@ export class ComputeManager {
     s.view.finishedAt = Date.now();
     this.decide(s, null, `Failed: ${error}`);
     this.publish(s);
+    this.deps.onSetEnded?.(this.snapshot(s));
   }
 
   // ---------- Device side ----------
@@ -267,7 +292,7 @@ export class ComputeManager {
   }
 
   private onPull(d: LiveDevice, cores: number) {
-    const s = this.active();
+    const s = this.withWork();
     if (!s || s.view.status !== "running") {
       this.deps.sendToDevice(d, { type: "job.none", retryMs: IDLE_RETRY_MS, reason: "no compute work" });
       return;
@@ -421,6 +446,8 @@ export class ComputeManager {
       s.view.status = "failed";
       s.view.error = `${lost} of ${s.items.length} reviews could not be analyzed (${s.view.batches.dropped} batches failed 3 times); see the decisions below`;
       this.decide(s, null, `Failed: ${s.view.error}`);
+      this.publish(s);
+      this.deps.onSetEnded?.(this.snapshot(s));
       return;
     }
     s.view.status = "done";
@@ -429,6 +456,8 @@ export class ComputeManager {
       null,
       `Done: ${s.view.sentences} sentences in ${secs} s across ${s.devices.size} device(s)` + (lost ? ` (${lost} reviews in failed batches left out)` : ""),
     );
+    this.publish(s);
+    this.deps.onSetEnded?.(this.snapshot(s));
   }
 
   // ---------- Health engine hooks ----------

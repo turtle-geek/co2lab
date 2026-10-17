@@ -6,6 +6,7 @@ import {
   OFFLINE_AFTER_MS,
   tempLimits,
   type Capability,
+  type ContextItem,
   type DeviceState,
   type DeviceView,
   type HubToClient,
@@ -37,6 +38,8 @@ export interface LiveDevice {
   errorNote: string | null;
   current: CurrentTask | null;
   latestFrame: FrameMsg | null;
+  /** What the device told the planner (P4): installed apps, Steam games, browser. */
+  context: ContextItem[];
 }
 
 export function isResting(d: LiveDevice): boolean {
@@ -91,6 +94,7 @@ export class DeviceRegistry {
       errorNote: null,
       current: null,
       latestFrame: null,
+      context: [],
     };
     this.devices.set(rec.id, d);
     this.byHash.set(rec.tokenHash, rec.id);
@@ -212,6 +216,7 @@ export class DeviceRegistry {
       lastSeenAt: d.lastHeartbeatAt,
       currentTask: d.current ? { ...d.current } : null,
       note: noteFor(d, state),
+      context: d.context.slice(0, 300),
     };
   }
 }

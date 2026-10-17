@@ -2,7 +2,7 @@
 // implementation under hub/src/db/ and swaps it in via createRepository() in index.ts.
 // Runtime-only state (sockets, last heartbeat, latest frame) is NOT stored here.
 
-import type { AgentConfig, Burn, Capability, Deal, DealSource, DeviceKind, RankedDeal, StepKind } from "@co2lab/shared";
+import type { AgentConfig, Burn, Capability, Deal, DealSource, DeviceKind, RankedDeal, RunAnswer, StepKind } from "@co2lab/shared";
 
 export interface DeviceRecord {
   id: string;
@@ -33,6 +33,8 @@ export interface RunRecord {
   status: RunStatus;
   config: AgentConfig;
   ranked: RankedDeal[] | null;
+  /** General-agent runs (P4): the composed answer. */
+  answer?: RunAnswer | null;
   burn: Burn;
   error: string | null;
   createdAt: number;
@@ -45,7 +47,7 @@ export interface SubtaskRecord {
   id: string;
   runId: string;
   capability: Capability;
-  source: DealSource;
+  source: DealSource | "agent";
   label: string;
   goal: string;
   status: SubtaskStatus;
