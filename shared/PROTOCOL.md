@@ -17,7 +17,11 @@ The source of truth is [`src/protocol.ts`](src/protocol.ts) (zod). This file exp
 | `POST /api/login` | none | `{ "passphrase": "..." }` | `204`, sets httpOnly `co2lab_session` cookie |
 | `POST /api/logout` | owner | — | `204` |
 | `POST /api/pair` | the one-time code | `PairRequest` | `200 PairResponse` or `400 {error}` |
+| `POST /api/device-code` | none (owner approves later) | `DeviceCodeStartRequest` | `200 DeviceCodeStartResponse` or `429 {error:"rate_limited"\|"too_many_pending"}` |
+| `POST /api/device-code/poll` | the device code | `{ "deviceCode": "..." }` | `200 DeviceCodePollResponse` or `404 {error:"unknown_code"}` |
 | `GET /api/health` | none | — | `200 {ok:true}` |
+| `GET /install.ps1`, `GET /install.sh` | none | — | Worker installer with the hub URL filled in |
+| `GET /install/worker.tgz` | none | — | Prebuilt worker bundle (`npm run bundle -w worker-web`) |
 
 ## Pairing
 
@@ -33,6 +37,29 @@ The source of truth is [`src/protocol.ts`](src/protocol.ts) (zod). This file exp
 3. Device opens `/ws` and sends `{ "type": "hello", "role": "device", "token": "<token>" }`. Hub replies `{ "type": "hello.ok", "deviceId": "01J...", "name": "Galaxy A54" }`.
 
 Errors: `400 {"error":"code_expired"|"code_invalid"|"too_many_attempts"}`. A failed attempt does not consume the code; 5 failures do.
+
+## Device-code pairing (laptops and desktops)
+
+Computers join without a code from the dashboard, like `gh auth login`. The Android app keeps the 6-digit flow above.
+
+1. The worker detects the computer and calls `POST /api/device-code`:
+   ```json
+   { "name": "EZ-Laptop", "kind": "laptop", "capabilities": ["web"],
+     "info": { "hostname": "EZ-Laptop", "os": "Microsoft Windows 11 Pro 10.0.26200", "arch": "x64",
+               "model": "HP ZBook Power 16 inch G11", "cpu": "Intel Core Ultra 7 155H (22 threads)",
+               "ramGb": 31, "hasBattery": true, "browser": "Microsoft Edge" } }
+   ```
+   `kind` is `laptop | desktop | cloud`. Response:
+   ```json
+   { "deviceCode": "<secret>", "userCode": "FLSX-TPJL", "verificationUrl": "https://<hub>/approve",
+     "verificationUrlComplete": "https://<hub>/approve?code=FLSX-TPJL", "expiresAt": 1760640600000, "intervalS": 3 }
+   ```
+   The worker prints the user code, the URL and a QR of the URL.
+2. Owners get `{ "type": "devicecode.list", "hubUrl": "...", "pending": [PendingDevice] }` after the snapshot and on every change (viewers never do). `PendingDevice` has the `userCode`, name, kind, capabilities, `info`, the client `ip`, `createdAt` and `expiresAt`.
+3. The owner sends `{ "type": "devicecode.approve", "userCode": "FLSX-TPJL", "name": "ZBook" }` (`name` optional, renames the device) or `{ "type": "devicecode.deny", "userCode": "FLSX-TPJL" }`. An unknown or expired code gives `error` `devicecode_not_found` / `devicecode_expired`.
+4. The worker polls `POST /api/device-code/poll {deviceCode}` every `intervalS`. Responses: `{"status":"pending"}`, `{"status":"slow_down"}` (poll less often), `{"status":"approved","deviceId","token","name"}` (returned once), `{"status":"denied"}`, `{"status":"expired"}`. Then it opens `/ws` with the token as in step 3 above.
+
+Limits: codes live 10 min; 5 starts per client IP per 10 min and 20 pending in total (`429`). The user code uses 20 consonants (8 letters, about 2.6 × 10¹⁰ codes) and is only usable by a logged-in owner; the device code is a 32-byte secret.
 
 ## Device ↔ hub messages
 
@@ -84,7 +111,7 @@ Owners authenticate with the session cookie: `{ "type": "hello", "role": "owner"
 
 On `hello` the hub replies with `state.snapshot`, then streams `device.update`, `device.removed`, `frame`, `step`, `run.update`, `approval.request`, `approval.resolved`, `research.update`.
 
-Owner commands: `run.create {clientRunId, prompt}` (idempotent by `clientRunId`), `pair.start`, `device.revoke {deviceId}`, `viewer.create {ttlMinutes?}` → `viewer.link`, `share.request {runId, target}` → `approval.request`, `approval.respond {approvalId, approve}`, and Research Mode: `research.capture {app}`, `research.label {captureId, deals}`, `research.propose`, `research.feedback {experimentId, kind, text}`.
+Owner commands: `run.create {clientRunId, prompt}` (idempotent by `clientRunId`), `pair.start`, `devicecode.approve {userCode, name?}`, `devicecode.deny {userCode}`, `device.revoke {deviceId}`, `viewer.create {ttlMinutes?}` → `viewer.link`, `share.request {runId, target}` → `approval.request`, `approval.respond {approvalId, approve}`, and Research Mode: `research.capture {app}`, `research.label {captureId, deals}`, `research.propose`, `research.feedback {experimentId, kind, text}`.
 
 ## Capabilities
 

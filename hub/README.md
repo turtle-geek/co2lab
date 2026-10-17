@@ -36,6 +36,8 @@ labelled test fixture, because only a real phone can open the apps. Its frames r
   Login is off until `OWNER_PASSPHRASE` and a 32+ char `SESSION_SECRET` are set. `GET /api/session` → `{owner}`.
   Device tokens and viewer tokens are stored only as SHA-256. Bad or missing `hello` → `error` then close 4001.
 - **Pairing**: `pair.start` → 6-digit code, 5 min, single use. A wrong code counts against every live code; 5 strikes burns it.
+- **Device-code pairing** (computers, `src/deviceCodes.ts`): `POST /api/device-code` → user code + approve URL, owner approves with `devicecode.approve` (pending list goes to owners as `devicecode.list`), worker polls `POST /api/device-code/poll`. 10 min TTL, 5 starts per IP per 10 min, 20 pending max.
+- **Installer**: `GET /install.ps1`, `/install.sh` (from `worker-web/install/`, `__HUB_URL__` replaced with `HUB_PUBLIC_URL`) and `/install/worker.tgz` (`worker-web/dist/`, built by `npm run bundle -w worker-web`).
 - **Viewer links**: `viewer.create` → `${HUB_PUBLIC_URL}/?viewer=<token>`. Viewers get the same events and can send nothing.
 - **Device state** (`src/devices.ts`): revoked > offline (no heartbeat for 6 s) > error (10 s after a failure) >
   hot (≥ 42 °C until < 38 °C) > resting (< 20 % and not charging) > working > idle.
