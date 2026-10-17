@@ -604,14 +604,14 @@ code {
   fill: #6f4b2e;
 }
 .device__screen {
-  fill: #cddfb9;
+  fill: #dfeccf;
   transition: fill 0.5s ease;
 }
 .device__glow {
   animation: glow 2.6s ease-in-out infinite;
 }
 .device--working .device__screen {
-  fill: #d3e6c0;
+  fill: #e3f1d6;
 }
 /* offline: the whole device dims as one piece, screen off */
 .device--offline .device__body > * {
@@ -646,13 +646,13 @@ code {
   fill: #7d8577;
 }
 .device--resting .device__screen {
-  fill: #e1d9b2;
+  fill: #ece6c4;
 }
 .device--hot .device__screen {
-  fill: #ebc9b3;
+  fill: #f3d8c6;
 }
 .device--error .device__screen {
-  fill: #e8c9bf;
+  fill: #f1d9d1;
 }
 .device--revoked .device__screen {
   fill: #c2b59c;
