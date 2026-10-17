@@ -22,5 +22,5 @@ if [ "${1:-}" = "--env" ]; then
   echo "uploaded .env (HUB_PUBLIC_URL=https://$DOMAIN)"
 fi
 
-"${SSH[@]}" "cd /opt/co2lab && sudo -u co2lab git pull -q --ff-only && sudo -u co2lab npm ci --silent && sudo -u co2lab npm run build -w dashboard --silent && systemctl restart co2lab-hub && (systemctl restart co2lab-cloud-worker || true)"
+"${SSH[@]}" "cd /opt/co2lab && sudo -u co2lab git pull -q --ff-only && sudo -u co2lab npm ci --silent && sudo -u co2lab npm run build -w dashboard --silent && sudo -u co2lab npm run bundle -w worker-web && systemctl restart co2lab-hub && (systemctl restart co2lab-cloud-worker || true)"
 echo "deployed to https://$DOMAIN"

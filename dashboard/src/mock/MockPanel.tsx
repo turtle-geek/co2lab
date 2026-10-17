@@ -38,6 +38,7 @@ export function MockPanel() {
               {mockHub.devices.get("dev-dragonfly")?.state === "offline" ? "Open" : "Close"} Dragonfly lid
             </button>
             <button disabled={!mockHub.pairCode} onClick={() => mockHub.pairDevice()}>Pair device with code</button>
+            <button onClick={() => mockHub.requestJoin()}>Computer asks to join</button>
             <button onClick={() => mockHub.dropConnections(5000)}>Drop connection 5 s</button>
           </div>
         </div>
