@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.PowerManager
-import android.provider.MediaStore
 import android.provider.Settings
 import android.text.InputType
 import android.view.View
@@ -19,6 +18,9 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import kotlin.concurrent.thread
 
 /** Setup screen: pairing, live status, and the checklist the phone needs to run all day. */
@@ -57,7 +59,7 @@ class MainActivity : Activity() {
 
         // ----- Pairing (not paired yet) -----
         pairBox = section(column, "Pair with your hub")
-        pairBox.addView(hint("On the dashboard tap Add device, then scan the QR with the phone camera, or type the hub address and the 6-digit code here."))
+        pairBox.addView(hint("On the dashboard tap Add device, then tap Scan pairing QR here, or type the hub address and the 6-digit code."))
         hubInput = field("Hub address, e.g. https://co2lab.example.com", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         hubInput.setText(store.hubUrl)
         pairBox.addView(hubInput, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -68,7 +70,7 @@ class MainActivity : Activity() {
         pairBox.addView(nameInput, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         pairButton = button("Pair") { pair() }
         pairBox.addView(pairButton)
-        pairBox.addView(button("Scan QR with camera") { openCamera() })
+        pairBox.addView(button("Scan pairing QR") { scanQr() })
         pairMessage = TextView(this).apply { textSize = 14f }
         pairBox.addView(pairMessage)
 
@@ -77,6 +79,7 @@ class MainActivity : Activity() {
         pairedLabel = TextView(this).apply { textSize = 15f }
         pairedBox.addView(pairedLabel)
         pairedBox.addView(button("Reconnect now") { AgentService.start(this) })
+        pairedBox.addView(button("Scan a new pairing QR") { scanQr() })
         pairedBox.addView(button("Pair again (forget this hub)") {
             AgentService.stop(this)
             store.unpair()
@@ -142,11 +145,28 @@ class MainActivity : Activity() {
         super.onStop()
     }
 
-    /** co2lab://pair?hub=<url>&code=<6 digits> from the dashboard QR: fill in and pair right away. */
     private fun handleDeepLink(intent: Intent?) {
         val data = intent?.data ?: return
-        if (data.scheme != "co2lab" || data.host != "pair") return
         intent.data = null
+        handlePairPayload(data)
+    }
+
+    /** Scan the dashboard QR with Google's code scanner (runs in Play services, no camera permission). */
+    private fun scanQr() {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        GmsBarcodeScanning.getClient(this, options).startScan()
+            .addOnSuccessListener { code ->
+                val raw = code.rawValue.orEmpty()
+                val uri = Uri.parse(raw)
+                if (uri.scheme == "co2lab" && uri.host == "pair") handlePairPayload(uri)
+                else showPair("That QR is not a Co2lab pairing code.")
+            }
+            .addOnFailureListener { showPair("Scanner unavailable: ${it.message}. Type the address and code instead.") }
+    }
+
+    /** co2lab://pair?hub=<url>&code=<6 digits> from the dashboard QR: fill in and pair right away. */
+    private fun handlePairPayload(data: Uri) {
+        if (data.scheme != "co2lab" || data.host != "pair") return
         val hub = data.getQueryParameter("hub").orEmpty()
         val code = data.getQueryParameter("code").orEmpty()
         if (store.isPaired) {
@@ -196,14 +216,6 @@ class MainActivity : Activity() {
 
     private fun showPair(text: String) {
         pairMessage.text = text
-    }
-
-    private fun openCamera() {
-        try {
-            startActivity(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
-        } catch (_: Exception) {
-            showPair("No camera app found. Type the address and code instead.")
-        }
     }
 
     private fun askBatteryExemption() {
