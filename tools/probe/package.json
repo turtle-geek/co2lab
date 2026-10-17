@@ -1,0 +1,8 @@
+{
+  "name": "co2lab-probe",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway server to check the Android agent's capabilities on a real phone",
+  "scripts": { "start": "node server.mjs" },
+  "dependencies": { "ws": "^8.18.0" }
+}
