@@ -15,7 +15,7 @@ const INK = "#2f3a2a";
 const CHEEKS: Record<DeviceState, { y: number; dx: number } | null> = {
   idle: { y: 92, dx: 37 },
   working: { y: 93, dx: 37 },
-  offline: { y: 104, dx: 42 },
+  offline: { y: 104, dx: 40 },
   resting: { y: 94, dx: 37 },
   hot: { y: 94, dx: 37 },
   error: { y: 94, dx: 37 },
@@ -29,8 +29,8 @@ function Eyes({ mood }: { mood: DeviceState }) {
       // ^ ^ happy arches
       return (
         <g {...p}>
-          <path d="M72 85 q7 -9 14 0" />
-          <path d="M114 85 q7 -9 14 0" />
+          <path d="M72 82 q7 -13 14 0" />
+          <path d="M114 82 q7 -13 14 0" />
         </g>
       );
     case "working":
@@ -45,8 +45,8 @@ function Eyes({ mood }: { mood: DeviceState }) {
       // closed, sleeping
       return (
         <g {...p}>
-          <path d="M71 89 q8 7 16 0" />
-          <path d="M113 89 q8 7 16 0" />
+          <path d="M71 87 q8 10 16 0" />
+          <path d="M113 87 q8 10 16 0" />
         </g>
       );
     case "resting":
@@ -96,7 +96,7 @@ function Mouth({ mood }: { mood: DeviceState }) {
       // tight, slightly strained
       return <path d="M94 94 q6 -4 12 0" {...p} />;
     case "offline":
-      return <ellipse cx="100" cy="102" rx="3.5" ry="4.5" fill={INK} />;
+      return <ellipse cx="100" cy="104" rx="3.8" ry="4.8" fill={INK} />;
     case "resting":
       return <path d="M92 96 q8 -6 16 0" {...p} />;
     case "hot":
@@ -114,9 +114,9 @@ const CROWN: Record<DeviceState, string> = {
   idle: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
   // working: a little wider, squeezed by effort
   working: "M100 34 C124 33 145 41 155 58 C163 72 162 94 155 110 C147 128 126 138 100 138 C73 138 52 128 45 111 C38 95 38 72 46 58 C56 41 77 34 100 34Z",
-  // asleep: the normal round top, slumping into a wider oval where the cheeks are
+  // asleep: round, narrower on top and a little chubbier toward a rounded bottom
   offline:
-    "M100 32 C122 31 141 40 150 57 C156 68 158 80 157 90 C166 100 168 118 158 130 C148 142 124 144 100 142 C76 144 52 142 42 130 C32 118 34 100 43 90 C42 80 44 68 50 57 C59 41 78 33 100 32Z",
+    "M100 34 C126 33 146 47 152 68 C157 84 162 100 158 114 C153 132 130 142 100 142 C70 142 47 132 42 114 C38 100 43 84 48 68 C54 47 74 35 100 34Z",
   // resting (low battery): rounded top, leaves sagging down the sides
   resting:
     "M44 98 C41 54 70 36 100 36 C130 36 159 54 156 98 C154 120 144 132 132 127 C124 136 110 133 100 127 C90 133 76 136 68 127 C56 132 46 120 44 98Z",
