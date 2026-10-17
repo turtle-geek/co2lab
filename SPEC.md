@@ -50,6 +50,7 @@ Fallback rule: if an app fails live, its subtask shows "failed: <reason>" on the
 
 - **P1 Research Mode (Papiers Autoresearch Challenge)**: see section 4.5.
 - **P2 Tiger Data**: telemetry, agent steps, runs, experiments, trials stored in Tiger Data (time-series Postgres). Until P2 lands, the hub keeps state in memory behind the same repository interface.
+- **P3 Compute jobs** (Steam "worth it?" review analysis split across the old devices): see section 4.7.
 
 ### Nice-to-have
 
@@ -133,6 +134,33 @@ Done for the demo when: at least one full cycle has run, a human flag or redirec
 ### 4.6 WhatsApp share (N1)
 
 Owner taps **Send to group** → picks a group name saved in settings → dashboard shows the exact message → owner taps **Approve** → hub sends `subtask` `app:whatsapp-send` to A54 → app opens WhatsApp via share intent, selects the group by name, taps send, screenshots confirmation. Deal list only, never redeem codes.
+
+### 4.7 Compute jobs: "Is this Steam game worth it?" (P3)
+
+Purpose: old devices do real compute instead of a cloud GPU, and the Lab researches how to split that work for the least time and energy. The user-facing job stays money-saving: "is this game worth buying at this sale price?"
+
+Pipeline (one request = one **job set**):
+
+1. **Plan (hub, one Gemini call):** request → games (Steam app IDs) and aspects to check (e.g. story, grind, co-op, performance), each with 3-5 seed phrases.
+2. **Fetch (hub):** Steam `appreviews/<appid>?json=1` (public, cursor-paged, low rate). Saved to `hub/data/reviews/<appid>.json` so every trial replays the same data.
+3. **Spam and review-bomb rules (hub, seconds):** playtime at review < 0.5 h, free copies, bursts (a day with > 5× the median daily negative count), near-duplicate text (from the phone's fingerprint jobs when available, else hub-side).
+4. **Shard (hub):** the kept reviews are cut into batches and queued. Batch size comes from the active **split strategy**, not from the LLM.
+5. **Compute (devices pull jobs they can run):**
+   - `embed` (capability `compute:embed`, Dragonfly and Cloud worker): split into sentences, embed with `all-MiniLM-L6-v2` (ONNX, quantized), match each sentence to aspects by cosine similarity to the seed phrases, then a small sentiment model labels matched sentences. Runs natively in Node (`onnxruntime-node` via transformers.js), installed on first use; models cached in the worker folder. The model version is pinned in the job.
+   - `light` (capability `compute:light`, Galaxy A54, plain Kotlin): MinHash fingerprints for duplicate detection, timestamp burst counts, keyword pre-tags.
+   - Results are small (per-aspect counts by playtime bucket, fingerprints), never the review text.
+6. **Aggregate (hub):** per-aspect positive/negative shares by playtime bucket, bootstrap ranges, and a robustness check (verdict with and without the bomb window and under 3 filter settings).
+7. **Answer (hub, one Gemini call):** "worth it at this price?" with aspect scores, ranges, and how much filtering changed the result.
+
+**Capabilities and benchmark:** a device advertises `compute:embed` and/or `compute:light`. Before its first compute job it runs a 20-second benchmark (sentences/s, or reviews/s for `light`), which the hub stores and uses for speed-aware strategies.
+
+**Feedback loop, two levels:**
+- **In the run (automatic):** every finished batch reports duration, CPU %, temperature and battery. The scheduler adjusts the device's next batch size or pauses it (≥ 42 °C, battery < 20 % unplugged; the phone only works while charging). A batch whose device drops goes back in the queue (same rule as subtasks, max 3 tries).
+- **Between runs (Lab, §4.5 loop):** research question "How should compute jobs be split across old devices to finish fastest with the least energy?" Configs are split strategies: **fast** (big batches, no pausing), **eco** (small batches, pause at a lower temperature, most efficient device first), and variants the agent proposes. Trials replay the same saved reviews; metrics: total time, estimated energy (CPU-seconds × per-device watts, labeled an estimate; battery drain where unplugged), peak temperature, retried batches. Owner feedback (e.g. "never push the phone past 40 °C") must change the next experiment.
+
+What it is not: no simulated "players like you" predictions (review playtime is when the review was written, so it cannot support "you will hit the grind wall by hour 35"), and the hub never runs arbitrary commands on devices: workers only run job types built into them.
+
+Done when: one Steam request runs end to end with jobs split across the Dragonfly, the Cloud worker and the A54; temperature and battery are visible per device during the run; and one Lab cycle compares fast vs. eco on the same saved reviews.
 
 ## 5. Tech stack and why
 
@@ -268,6 +296,7 @@ Each task owns its folder. Nobody edits another task's folder; contract changes 
 | **T5** | Deploy | `deploy/` | Vultr VPS with Caddy + systemd for hub and Cloud worker; dashboard served by hub; HTTPS/WSS work from the A54 on another network | 1 h |
 | **T6** | Tiger Data | `hub/src/db/` (only this subfolder), `db/schema.sql` | Schema applied; repo interface swapped from memory to Postgres; telemetry and steps visible in Tiger console | 1 h |
 | **T7** | Research Mode | `hub/src/research/`, `dashboard/src/lab/` | Full loop from §4.5 with one completed cycle, human feedback changes next experiment, finding saved via Papiers CLI | 3.5 h |
+| **T9** | Compute jobs (P3) | `hub/src/compute/`, `worker-web/src/compute/`, `android/.../compute/`, `dashboard/src/compute/` | §4.7 done-when | 7–8 h (+2 h phone) |
 | N1 | WhatsApp share | `android/.../recipes/WhatsApp*.kt`, hub approval endpoint | Approved message posts to group | 1 h |
 | N2 | Remote redeem | `android/.../recipes/Redeem*.kt`, dashboard redeem view | Fresh code shown on owner's phone within 15 s | 1.5 h |
 | — | Polish, demo rehearsal, Devpost, video | — | Demo script runs 3 times in a row | 2–3 h |
