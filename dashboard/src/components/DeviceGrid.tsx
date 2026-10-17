@@ -88,6 +88,7 @@ export function TreeCard({ device, readOnly, onRevoke }: { device: DeviceView; r
           )}
         </div>
         {device.note && <p className={`tree-card__note tree-card__note--${device.state}`}>{device.note}</p>}
+        {sharesLine(device) && <p className="tree-card__shares">Shares: {sharesLine(device)}</p>}
         {!readOnly && device.state !== "revoked" && (
           confirming ? (
             <span className="tree-card__confirm">
@@ -146,4 +147,14 @@ export function DeviceGrid({
       {readOnly && devices.length === 0 && <p className="empty">No devices paired yet.</p>}
     </section>
   );
+}
+
+/** What this device tells the planner (SPEC §4.8), e.g. "38 apps · 12 Steam games · Microsoft Edge". */
+function sharesLine(d: DeviceView): string | null {
+  const c = d.context ?? [];
+  const apps = c.filter((x) => x.kind === "installed_app").length;
+  const games = c.filter((x) => x.kind === "steam_game").length;
+  const browser = c.find((x) => x.kind === "browser")?.label;
+  const parts = [apps ? `${apps} apps` : "", games ? `${games} Steam game${games === 1 ? "" : "s"}` : "", browser ?? ""].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
 }

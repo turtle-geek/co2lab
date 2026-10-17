@@ -185,6 +185,8 @@ export const SubtaskView = z.object({
   dealCount: z.number().int(),
   /** General-agent tasks: what was found, in one or two sentences. */
   findings: z.string().nullable().optional(),
+  /** Display name, e.g. "Tim Hortons" or "Web: store.steampowered.com". */
+  label: z.string().optional(),
 });
 export type SubtaskView = z.infer<typeof SubtaskView>;
 

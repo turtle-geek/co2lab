@@ -14,6 +14,7 @@ function SubtaskRow({ s, deviceName }: { s: SubtaskView; deviceName: (id: string
   const dev = deviceName(s.deviceId);
   let detail: string;
   if (s.status === "failed") detail = `failed: ${s.error ?? "no reason given"}`;
+  else if (s.status === "done" && s.findings !== undefined && s.findings !== null) detail = s.findings;
   else if (s.status === "done") detail = s.dealCount === 0 ? "no deals found" : `${s.dealCount} deal${s.dealCount === 1 ? "" : "s"}`;
   else if (s.status === "running") detail = dev ? `on ${dev}` : "running";
   else if (s.status === "cancelled") detail = s.error ?? "cancelled";
@@ -21,7 +22,7 @@ function SubtaskRow({ s, deviceName }: { s: SubtaskView; deviceName: (id: string
 
   return (
     <li className={`subtask subtask--${s.status}`}>
-      <span className="subtask__name">{capabilityLabel(s.capability)}</span>
+      <span className="subtask__name">{s.label ?? capabilityLabel(s.capability)}</span>
       <span className={`pill pill--sub-${s.status}`}>{SUB_STATUS[s.status]}</span>
       <span className="subtask__detail">
         {detail}
@@ -167,7 +168,26 @@ export function Results({
         </ul>
       )}
 
-      {run.status === "merging" && <p className="results__state">Merging and ranking deals…</p>}
+      {run.status === "merging" && <p className="results__state">{run.subtasks.some((s) => /^(Web: |Review analysis)/.test(s.label ?? "")) ? "Writing the answer…" : "Merging and ranking deals…"}</p>}
+      {run.answer && (
+        <div className="answer">
+          <p className="answer__text">{run.answer.text}</p>
+          {run.answer.items.length > 0 && (
+            <ol className="answer__items">
+              {run.answer.items.map((it, i) => (
+                <li key={i}>
+                  <b>{it.url ? <a href={it.url} target="_blank" rel="noreferrer">{it.title}</a> : it.title}</b>
+                  <span> — {it.detail}</span>
+                  <span className="answer__src">
+                    {it.source}
+                    {deviceName(it.deviceId) ? ` · ${deviceName(it.deviceId)}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
       {run.status === "failed" && (
         <div className="results__failed">
           <b>Run failed.</b> {run.error ?? "No subtask finished."}

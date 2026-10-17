@@ -156,6 +156,7 @@ export class RunManager {
         error: s.error,
         dealCount: s.dealCount,
         findings: this.general.get(s.id)?.summary ?? null,
+        label: s.label,
       })),
       ranked: r.ranked,
       answer: r.answer ?? null,
