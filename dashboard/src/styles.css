@@ -370,7 +370,9 @@ code {
   overflow: hidden;
   transition: background 0.4s ease;
 }
-.tree-card--offline .tree-card__art,
+.tree-card--offline .tree-card__art {
+  background: #8e998a;
+}
 .tree-card--revoked .tree-card__art {
   background: var(--sleep);
 }
@@ -386,7 +388,7 @@ code {
 .tree-card__kind {
   position: absolute;
   top: 8px;
-  left: 8px;
+  right: 8px;
   font-size: 0.7rem;
   font-weight: 700;
   color: var(--ink-2);
@@ -565,6 +567,93 @@ code {
 }
 .add-card__sub {
   color: var(--ink-2);
+}
+
+/* ---------- device frames (laptop / phone / server) ---------- */
+
+.device {
+  width: 92%;
+  height: auto;
+  display: block;
+}
+.device__body > * {
+  fill: #f7eedd;
+  stroke: #6f4b2e;
+  stroke-width: 4.5;
+  transition: fill 0.4s ease, stroke 0.4s ease;
+}
+.device__body > .device__keys {
+  fill: #cdb594;
+  stroke: none;
+}
+.device__body > .device__cam,
+.device__body > .device__slot {
+  fill: #6f4b2e;
+  stroke: none;
+}
+.device__body > .device__home {
+  fill: #e9dcc4;
+  stroke-width: 3;
+}
+.device__body > .device__led {
+  fill: var(--green);
+  stroke: none;
+}
+.device__screen {
+  fill: #dfeccf;
+  transition: fill 0.5s ease;
+}
+.device__screen-edge {
+  fill: none;
+  stroke: #6f4b2e;
+  stroke-width: 3;
+}
+.device__glow {
+  animation: glow 2.6s ease-in-out infinite;
+}
+.device--working .device__screen {
+  fill: #e3f1d6;
+}
+.device--offline .device__screen {
+  fill: #66715f;
+}
+.device--offline .device__body > *:not(.device__keys):not(.device__cam):not(.device__slot):not(.device__led) {
+  fill: #d3cab9;
+  stroke: #5e4a39;
+}
+.device--offline .tree__zzz {
+  fill: #c3dbe9;
+}
+.device--offline .tree__zzz circle {
+  fill: #a9b8ad;
+}
+.device--offline .device__led {
+  fill: #7d8577;
+}
+.device--resting .device__screen {
+  fill: #ece6c4;
+}
+.device--hot .device__screen {
+  fill: #f3d8c6;
+}
+.device--error .device__screen {
+  fill: #f1d9d1;
+}
+.device--revoked .device__screen {
+  fill: #c2b59c;
+}
+.tree-embedded {
+  overflow: visible;
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* ---------- tree illustration ---------- */

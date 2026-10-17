@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { DeviceView } from "@co2lab/shared";
-import { Tree } from "./Tree";
+import { DeviceScene } from "./DeviceScene";
 import { STATE_LABEL, ago, useNow } from "../format";
 
 const SEGMENTS = 5;
@@ -61,7 +61,7 @@ export function TreeCard({ device, readOnly, onRevoke }: { device: DeviceView; r
   return (
     <article className={`card tree-card tree-card--${device.state}`} aria-label={`${device.name}, ${STATE_LABEL[device.state]}`}>
       <div className="tree-card__art">
-        <Tree mood={device.state} />
+        <DeviceScene kind={device.kind} mood={device.state} />
         <span className="tree-card__kind">{device.kind === "android" ? "Phone" : device.kind === "laptop" ? "Laptop" : "Cloud"}</span>
       </div>
       <div className="tree-card__body">

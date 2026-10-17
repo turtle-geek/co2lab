@@ -1,68 +1,73 @@
 // Tree illustration whose mood shows the device state. Inline SVG so CSS can animate parts.
+// Shapes follow the hand-drawn mock: soft lumpy crowns (never perfect circles), trunks that
+// widen toward the base, the mouth tucked just under the eyes, and oval cheeks level with it.
 
 import type { DeviceState } from "@co2lab/shared";
 
 const INK = "#2f3a2a";
 
+/** Eye line sits at y≈86; the mouth's lowest point lines up with the cheek centres (y=98). */
+const CHEEK_Y = 98;
+
 function Eyes({ mood }: { mood: DeviceState }) {
   const p = { stroke: INK, strokeWidth: 4, fill: "none", strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   switch (mood) {
     case "idle":
-      // ^ ^ happy
+      // ^ ^ happy arches
       return (
         <g {...p}>
-          <path d="M70 92 q8 -10 16 0" />
-          <path d="M114 92 q8 -10 16 0" />
+          <path d="M70 89 q8 -10 16 0" />
+          <path d="M114 89 q8 -10 16 0" />
         </g>
       );
     case "working":
       // > < squint
       return (
         <g {...p}>
-          <path d="M70 84 l14 7 l-14 7" />
-          <path d="M130 84 l-14 7 l14 7" />
+          <path d="M71 80 l13 6.5 l-13 6.5" />
+          <path d="M129 80 l-13 6.5 l13 6.5" />
         </g>
       );
     case "offline":
       // closed, sleeping
       return (
         <g {...p}>
-          <path d="M70 92 q8 8 16 0" />
-          <path d="M114 92 q8 8 16 0" />
+          <path d="M70 85 q8 7 16 0" />
+          <path d="M114 85 q8 7 16 0" />
         </g>
       );
     case "resting":
       // heavy lids
       return (
         <g {...p}>
-          <path d="M69 93 h18" />
-          <path d="M113 93 h18" />
-          <path d="M71 97 q7 4 14 0" strokeWidth={3} />
-          <path d="M115 97 q7 4 14 0" strokeWidth={3} />
+          <path d="M69 85 h18" />
+          <path d="M113 85 h18" />
+          <path d="M71 89 q7 4 14 0" strokeWidth={3} />
+          <path d="M115 89 q7 4 14 0" strokeWidth={3} />
         </g>
       );
     case "hot":
       // worried, wide
       return (
         <g>
-          <circle cx="78" cy="92" r="5" fill={INK} />
-          <circle cx="122" cy="92" r="5" fill={INK} />
-          <path d="M68 80 l16 4 M132 80 l-16 4" {...p} strokeWidth={3} />
+          <circle cx="78" cy="86" r="5" fill={INK} />
+          <circle cx="122" cy="86" r="5" fill={INK} />
+          <path d="M68 74 l16 4 M132 74 l-16 4" {...p} strokeWidth={3} />
         </g>
       );
     case "error":
       // dizzy spirals
       return (
         <g {...p} strokeWidth={3} className="tree__dizzy">
-          <path d="M78 92 m0 0 a2 2 0 1 1 3 -1 a5 5 0 1 1 -7 -4 a8 8 0 1 1 12 7" />
-          <path d="M122 92 m0 0 a2 2 0 1 1 3 -1 a5 5 0 1 1 -7 -4 a8 8 0 1 1 12 7" />
+          <path d="M78 86 m0 0 a2 2 0 1 1 3 -1 a5 5 0 1 1 -7 -4 a8 8 0 1 1 12 7" />
+          <path d="M122 86 m0 0 a2 2 0 1 1 3 -1 a5 5 0 1 1 -7 -4 a8 8 0 1 1 12 7" />
         </g>
       );
     case "revoked":
       return (
         <g {...p}>
-          <path d="M71 86 l14 12 M85 86 l-14 12" />
-          <path d="M115 86 l14 12 M129 86 l-14 12" />
+          <path d="M71 80 l14 12 M85 80 l-14 12" />
+          <path d="M115 80 l14 12 M129 80 l-14 12" />
         </g>
       );
   }
@@ -72,65 +77,81 @@ function Mouth({ mood }: { mood: DeviceState }) {
   const p = { stroke: INK, strokeWidth: 4, fill: "none", strokeLinecap: "round" as const };
   switch (mood) {
     case "idle":
-      return <path d="M88 108 q12 12 24 0" {...p} />;
+      // small smile, bottom at the cheek line
+      return <path d={`M92 ${CHEEK_Y - 5} q8 9 16 0`} {...p} />;
     case "working":
-      return <path d="M94 112 h12" {...p} />;
+      // tight, slightly strained
+      return <path d={`M94 ${CHEEK_Y} q6 -4 12 0`} {...p} />;
     case "offline":
-      return <ellipse cx="100" cy="112" rx="3.5" ry="4.5" fill={INK} />;
+      return <ellipse cx="100" cy={CHEEK_Y - 3} rx="3.5" ry="4.5" fill={INK} />;
     case "resting":
-      return <path d="M90 114 q10 -7 20 0" {...p} />;
+      return <path d={`M91 ${CHEEK_Y + 1} q9 -6 18 0`} {...p} />;
     case "hot":
-      return <path d="M88 112 q4 -5 8 0 q4 5 8 0 q4 -5 8 0" {...p} strokeWidth={3} />;
+      return <path d={`M88 ${CHEEK_Y - 1} q4 -5 8 0 q4 5 8 0 q4 -5 8 0`} {...p} strokeWidth={3} />;
     case "error":
-      return <ellipse cx="100" cy="113" rx="6" ry="7" fill={INK} />;
+      return <ellipse cx="100" cy={CHEEK_Y - 1} rx="6" ry="7" fill={INK} />;
     case "revoked":
-      return <path d="M90 115 q10 -8 20 0" {...p} />;
+      return <path d={`M90 ${CHEEK_Y + 2} q10 -8 20 0`} {...p} />;
   }
 }
 
-/** Crown silhouette per mood. */
-function Crown({ mood }: { mood: DeviceState }) {
-  if (mood === "resting") {
-    // drooping: rounded top, leaves sagging down the sides
-    return (
-      <g className="tree__crown-shape">
-        <path d="M44 100 C40 52 72 36 100 36 C128 36 160 52 156 100 C154 122 144 134 132 128 C124 138 110 134 100 128 C90 134 76 138 68 128 C56 134 46 122 44 100Z" />
-        <ellipse cx="50" cy="128" rx="9" ry="16" transform="rotate(18 50 128)" className="tree__leaf" />
-        <ellipse cx="150" cy="128" rx="9" ry="16" transform="rotate(-18 150 128)" className="tree__leaf" />
-      </g>
-    );
-  }
-  if (mood === "offline") {
-    // lumpy, like the mock
-    return (
-      <path
-        className="tree__crown-shape"
-        d="M46 100 C36 70 58 44 84 42 C98 30 128 34 140 50 C160 56 166 84 154 100 C160 120 140 136 120 130 C108 140 86 140 76 130 C54 136 38 120 46 100Z"
-      />
-    );
-  }
-  if (mood === "revoked") {
-    return (
-      <g className="tree__crown-shape">
-        <path d="M58 104 C50 76 70 58 92 60 C104 50 128 56 136 70 C152 76 154 98 142 108 C140 124 120 130 108 124 C96 132 76 130 70 120 C58 120 54 112 58 104Z" />
-      </g>
-    );
-  }
-  return <circle className="tree__crown-shape" cx="100" cy="88" r="58" />;
-}
+/** Soft, slightly uneven crown. Each mood gets its own silhouette; none is a perfect circle. */
+const CROWN: Record<DeviceState, string> = {
+  // awake: soft rounded blob with slightly squared sides, like the hand-drawn mock
+  idle: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
+  // working: a little wider, squeezed by effort
+  working: "M100 34 C124 33 145 41 155 58 C163 72 162 94 155 110 C147 128 126 138 100 138 C73 138 52 128 45 111 C38 95 38 72 46 58 C56 41 77 34 100 34Z",
+  // asleep: lumpy and bottom-heavy, two bumps on top, sagging lobes below
+  offline:
+    "M52 104 C40 84 48 58 72 50 C80 34 104 30 118 42 C138 38 156 54 154 74 C166 88 162 112 146 120 C140 136 118 142 100 138 C84 144 62 138 56 124 C46 120 44 110 52 104Z",
+  // resting (low battery): rounded top, leaves sagging down the sides
+  resting:
+    "M44 98 C41 54 70 36 100 36 C130 36 159 54 156 98 C154 120 144 132 132 127 C124 136 110 133 100 127 C90 133 76 136 68 127 C56 132 46 120 44 98Z",
+  hot: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
+  error: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
+  // revoked: shrunken and withered
+  revoked:
+    "M58 104 C50 76 70 58 92 60 C104 50 128 56 136 70 C152 76 154 98 142 108 C140 124 120 130 108 124 C96 132 76 130 70 120 C58 120 54 112 58 104Z",
+};
 
-export function Tree({ mood }: { mood: DeviceState }) {
+/** Trunk that is narrow under the crown and flares out at the base. */
+const TRUNK = "M95 128 L105 128 C105 148 106 166 110 179 C111.5 184 109.5 187 106 187 L94 187 C90.5 187 88.5 184 90 179 C94 166 95 148 95 128Z";
+
+type Placement = { x: number; y: number; width: number; height: number };
+
+/**
+ * Standalone tree (login screen) or, with `placement`, a tree nested inside another SVG
+ * such as a device screen.
+ */
+export function Tree({ mood, placement }: { mood: DeviceState; placement?: Placement }) {
   const showCheeks = mood !== "revoked";
+  const cheekRx = mood === "hot" ? 11 : 9;
+  const cheekRy = mood === "hot" ? 8.5 : 7.8;
   return (
-    <svg className={`tree tree--${mood}`} viewBox="0 0 200 200" role="img" aria-label={`Tree looks ${mood}`}>
-      <rect className="tree__trunk" x="92" y="128" width="16" height="54" rx="6" />
+    <svg
+      className={`${placement ? "tree-embedded" : "tree"} tree--${mood}`}
+      viewBox="0 0 200 200"
+      role="img"
+      aria-label={`Tree looks ${mood}`}
+      overflow="visible"
+      {...placement}
+    >
+      <path className="tree__trunk" d={TRUNK} />
       <g className="tree__crown">
-        <Crown mood={mood} />
+        <g className="tree__crown-shape-group">
+          <path className="tree__crown-shape" d={CROWN[mood]} />
+          {mood === "resting" && (
+            <>
+              <ellipse cx="50" cy="126" rx="9" ry="16" transform="rotate(18 50 126)" className="tree__leaf" />
+              <ellipse cx="150" cy="126" rx="9" ry="16" transform="rotate(-18 150 126)" className="tree__leaf" />
+            </>
+          )}
+        </g>
         <g className="tree__face">
           {showCheeks && (
             <g className="tree__cheeks">
-              <ellipse cx="66" cy="106" rx={mood === "hot" ? 11 : 8} ry={mood === "hot" ? 8 : 6} />
-              <ellipse cx="134" cy="106" rx={mood === "hot" ? 11 : 8} ry={mood === "hot" ? 8 : 6} />
+              <ellipse cx="63" cy={CHEEK_Y} rx={cheekRx} ry={cheekRy} />
+              <ellipse cx="137" cy={CHEEK_Y} rx={cheekRx} ry={cheekRy} />
             </g>
           )}
           <Eyes mood={mood} />
@@ -139,7 +160,7 @@ export function Tree({ mood }: { mood: DeviceState }) {
       </g>
 
       {mood === "working" && (
-        <path className="tree__sweat" d="M156 40 C156 40 146 54 146 60 a10 10 0 0 0 20 0 C166 54 156 40 156 40Z" />
+        <path className="tree__sweat" d="M156 38 C156 38 146 52 146 58 a10 10 0 0 0 20 0 C166 52 156 38 156 38Z" />
       )}
       {mood === "offline" && (
         <g className="tree__zzz">
