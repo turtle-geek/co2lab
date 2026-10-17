@@ -1,0 +1,217 @@
+// Device registry: persistent records plus live state (socket, heartbeat, telemetry, work).
+// deriveState() turns that into the DeviceState that drives the tree mood.
+
+import {
+  BATTERY_REST_BELOW_PCT,
+  OFFLINE_AFTER_MS,
+  TEMP_PAUSE_AT_C,
+  TEMP_RESUME_BELOW_C,
+  type Capability,
+  type DeviceState,
+  type DeviceView,
+  type HubToClient,
+  type Telemetry,
+} from "@co2lab/shared";
+import type { WebSocket } from "ws";
+import type { DeviceRecord, Repository } from "./repo/index.js";
+
+/** How long a failure keeps the card in the "error" mood. */
+export const ERROR_SHOW_MS = 10_000;
+
+export interface CurrentTask {
+  subtaskId: string;
+  capability: Capability;
+  label: string;
+  progress: number;
+}
+
+export type FrameMsg = Extract<HubToClient, { type: "frame" }>;
+
+export interface LiveDevice {
+  rec: DeviceRecord;
+  socket: WebSocket | null;
+  lastHeartbeatAt: number | null;
+  telemetry: Telemetry | null;
+  online: boolean;
+  hot: boolean;
+  errorUntil: number;
+  errorNote: string | null;
+  current: CurrentTask | null;
+  latestFrame: FrameMsg | null;
+}
+
+export function isResting(d: LiveDevice): boolean {
+  const t = d.telemetry;
+  return !!t && t.batteryPct !== null && t.batteryPct < BATTERY_REST_BELOW_PCT && t.charging !== true;
+}
+
+export function deriveState(d: LiveDevice, now = Date.now()): DeviceState {
+  if (d.rec.revokedAt) return "revoked";
+  if (!d.online) return "offline";
+  if (d.errorUntil > now) return "error";
+  if (d.hot) return "hot";
+  if (isResting(d)) return "resting";
+  if (d.current) return "working";
+  return "idle";
+}
+
+function noteFor(d: LiveDevice, state: DeviceState): string | null {
+  switch (state) {
+    case "error":
+      return d.errorNote;
+    case "hot":
+      return `${d.rec.name} is hot (${d.telemetry?.tempC ?? "?"} °C); paused until it cools below ${TEMP_RESUME_BELOW_C} °C`;
+    case "resting":
+      return `plug in ${d.rec.name}`;
+    case "revoked":
+      return "access revoked";
+    default:
+      return null;
+  }
+}
+
+export class DeviceRegistry {
+  private devices = new Map<string, LiveDevice>();
+  private byHash = new Map<string, string>();
+
+  constructor(private repo: Repository) {}
+
+  async load() {
+    for (const rec of await this.repo.listDevices()) this.track(rec);
+  }
+
+  private track(rec: DeviceRecord): LiveDevice {
+    const d: LiveDevice = {
+      rec,
+      socket: null,
+      lastHeartbeatAt: null,
+      telemetry: null,
+      online: false,
+      hot: false,
+      errorUntil: 0,
+      errorNote: null,
+      current: null,
+      latestFrame: null,
+    };
+    this.devices.set(rec.id, d);
+    this.byHash.set(rec.tokenHash, rec.id);
+    return d;
+  }
+
+  async add(rec: DeviceRecord): Promise<LiveDevice> {
+    await this.repo.upsertDevice(rec);
+    return this.track(rec);
+  }
+
+  get(id: string) {
+    return this.devices.get(id);
+  }
+
+  byTokenHash(hash: string) {
+    const id = this.byHash.get(hash);
+    return id ? this.devices.get(id) : undefined;
+  }
+
+  all(): LiveDevice[] {
+    return [...this.devices.values()];
+  }
+
+  active(): LiveDevice[] {
+    return this.all().filter((d) => !d.rec.revokedAt);
+  }
+
+  /** Any non-revoked device (online or not) that has the capability. */
+  anyWith(cap: Capability): boolean {
+    return this.active().some((d) => d.rec.capabilities.includes(cap));
+  }
+
+  /** Can take new work right now. */
+  isAvailable(d: LiveDevice, now = Date.now()): boolean {
+    return (
+      !d.rec.revokedAt &&
+      d.online &&
+      d.socket !== null &&
+      d.socket.readyState === d.socket.OPEN &&
+      !d.hot &&
+      !isResting(d) &&
+      !d.current &&
+      d.errorUntil <= now
+    );
+  }
+
+  /** Online and healthy (may be busy). Used to decide whether the cloud worker should step in. */
+  isHealthy(d: LiveDevice): boolean {
+    return !d.rec.revokedAt && d.online && d.socket !== null && !d.hot && !isResting(d);
+  }
+
+  /** Record a sign of life. Returns true if the device just came online. */
+  touch(d: LiveDevice, now = Date.now()): boolean {
+    d.lastHeartbeatAt = now;
+    if (d.online) return false;
+    d.online = true;
+    return true;
+  }
+
+  applyTelemetry(d: LiveDevice, t: Telemetry) {
+    d.telemetry = t;
+    if (t.tempC !== null) {
+      if (t.tempC >= TEMP_PAUSE_AT_C) d.hot = true;
+      else if (d.hot && t.tempC < TEMP_RESUME_BELOW_C) d.hot = false;
+    }
+  }
+
+  setError(d: LiveDevice, note: string, now = Date.now()) {
+    d.errorNote = note;
+    d.errorUntil = now + ERROR_SHOW_MS;
+  }
+
+  /** Devices whose heartbeat has gone silent; marks them offline and returns them. */
+  sweepOffline(now = Date.now()): LiveDevice[] {
+    const out: LiveDevice[] = [];
+    for (const d of this.devices.values()) {
+      if (d.online && (d.lastHeartbeatAt === null || now - d.lastHeartbeatAt > OFFLINE_AFTER_MS)) {
+        d.online = false;
+        out.push(d);
+      }
+    }
+    return out;
+  }
+
+  /** Devices whose error mood just expired (so their card should refresh). */
+  sweepErrors(now = Date.now()): LiveDevice[] {
+    const out: LiveDevice[] = [];
+    for (const d of this.devices.values()) {
+      if (d.errorNote && d.errorUntil <= now) {
+        d.errorNote = null;
+        out.push(d);
+      }
+    }
+    return out;
+  }
+
+  async revoke(d: LiveDevice, now = Date.now()) {
+    d.rec.revokedAt = now;
+    d.online = false;
+    await this.repo.upsertDevice(d.rec);
+  }
+
+  remove(d: LiveDevice) {
+    this.devices.delete(d.rec.id);
+    this.byHash.delete(d.rec.tokenHash);
+  }
+
+  view(d: LiveDevice, now = Date.now()): DeviceView {
+    const state = deriveState(d, now);
+    return {
+      id: d.rec.id,
+      name: d.rec.name,
+      kind: d.rec.kind,
+      capabilities: d.rec.capabilities,
+      state,
+      telemetry: d.telemetry,
+      lastSeenAt: d.lastHeartbeatAt,
+      currentTask: d.current ? { ...d.current } : null,
+      note: noteFor(d, state),
+    };
+  }
+}

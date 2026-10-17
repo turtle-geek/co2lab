@@ -1,0 +1,27 @@
+{
+  "name": "@co2lab/hub",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc -p .",
+    "fake-device": "tsx scripts/fake-device.ts",
+    "e2e": "tsx scripts/e2e.ts"
+  },
+  "dependencies": {
+    "@co2lab/shared": "*",
+    "@fastify/static": "^10.1.6",
+    "@google/genai": "^2.30.0",
+    "fastify": "^5.12.7",
+    "ulid": "^3.0.2",
+    "ws": "^8.22.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15"
+  }
+}
