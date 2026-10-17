@@ -70,6 +70,7 @@ const TOOLS_TEXT =
   "Tools (each task uses exactly one):\n" +
   "- deals: collect current offers from one built-in source (source = app:tims, app:mcdonalds, app:popeyes need an Android device with that capability; web:redflagdeals needs a web device). Always use this tool (never web) for those four sources; use it for restaurant / food deal requests.\n" +
   "- web: a browser agent on a laptop or the Cloud worker visits sites and reads them to reach the goal. Give a concrete goal and, when you know it, a startUrl (e.g. a Steam store search URL https://store.steampowered.com/search/?term=...&maxprice=20 or a site's search page). One task per site or sub-question; tasks run in parallel on different devices.\n" +
+  "  For games, search the Steam store by tag rather than by words in the title, e.g. https://store.steampowered.com/search/?tags=1685&maxprice=20 (1685 = Co-op, 1662 = Survival, 1742 = Story Rich, 3843 = Online Co-Op) and sort by reviews (&filter=topsellers or &sort_by=Reviews_DESC).\n" +
   "- reviews: analyze Steam user reviews on the devices (topics like grind, story, performance, multiplayer, value, content; positive vs negative, by playtime). Needs Steam app IDs (numbers). Use only when you already know the IDs.\n";
 
 export async function planRequest(o: {
@@ -91,8 +92,10 @@ export async function planRequest(o: {
       "uniquely have (signed-in apps, installed games) and say so in reasoning. Keep it small: 1-4 tasks usually. " +
       "Never plan payments, orders, sign-ins, messages or posts. Set fields a tool does not use to null / []. " +
       (followUp
-        ? "This is the follow-up round: you see what the first tasks found. Add tasks only if they clearly improve the answer " +
-          "(for example review analysis for the candidate games found, using their Steam app IDs). Otherwise return no tasks."
+        ? "This is the follow-up round: you see what the first tasks found. Add tasks only if they clearly improve the answer. " +
+          "When the request depends on qualities players report (grind, story, performance, bugs, value) and the findings list " +
+          "candidate games with Steam app IDs (in store.steampowered.com/app/<id>/ links), add ONE reviews task for the 3-5 best " +
+          "candidates instead of browsing again. Otherwise return no tasks."
         : "If no listed device can do anything useful for the request, return no tasks and explain in cannotDo."),
     parts: [
       {

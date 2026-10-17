@@ -149,9 +149,14 @@ export async function callJson<S extends z.ZodType>(opts: {
         text = res.text;
         break;
       } catch (err) {
-        // Out of quota on this key: cool it down and move to the next key without waiting.
-        if (err instanceof ApiError && err.status === 429 && slots.length > 1 && switches < slots.length - 1) {
-          slot.coolUntil.set(model, Date.now() + cooldownMs(err));
+        // Out of quota (429) or this key's project blocked / invalid (403, 401, 400 "API key"):
+        // retire it for this model (blocked keys for a day) and move to the next key without waiting.
+        const blocked = err instanceof ApiError && (err.status === 403 || err.status === 401 || (err.status === 400 && /api key/i.test(err.message)));
+        if (err instanceof ApiError && (err.status === 429 || blocked) && slots.length > 1 && switches < slots.length - 1) {
+          if (blocked) {
+            for (const m of Object.values(config.gemini.models)) if (m) slot.coolUntil.set(m, Date.now() + 24 * 60 * 60_000);
+            log.warn(`gemini: key #${slot.n} rejected (${err.status}: ${describe(err).slice(0, 80)}); not using it again today`);
+          } else slot.coolUntil.set(model, Date.now() + cooldownMs(err));
           const next = pickSlot(model);
           if (next !== slot) {
             log.warn(`gemini ${opts.label}: key #${slot.n} out of quota for ${model}; switching to key #${next.n}`);

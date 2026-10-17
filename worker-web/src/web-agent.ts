@@ -14,6 +14,43 @@ const MAX_EVIDENCE_TEXT = 28_000;
 
 class Cancelled extends Error {}
 
+/** Runs in the page: numbers the visible interactive elements (data-co2lab-id) and reads the visible text. */
+const OBSERVE_SCRIPT = `function (max) {
+  function vis(el) {
+    var b = el.getBoundingClientRect();
+    var s = getComputedStyle(el);
+    return b.width > 2 && b.height > 2 && b.bottom > 0 && b.top < innerHeight && s.visibility !== "hidden" && s.display !== "none";
+  }
+  document.querySelectorAll("[data-co2lab-id]").forEach(function (e) { e.removeAttribute("data-co2lab-id"); });
+  var all = document.querySelectorAll("a[href], button, input, textarea, select, [role=button], [role=link], [role=tab], [onclick]");
+  var els = [];
+  for (var i = 0; i < all.length && els.length < max; i++) if (vis(all[i])) els.push(all[i]);
+  var nodes = els.map(function (el, i) {
+    el.setAttribute("data-co2lab-id", String(i + 1));
+    var b = el.getBoundingClientRect();
+    var text = (el.innerText || el.value || el.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim().slice(0, 80);
+    var desc = [el.placeholder ? "placeholder: " + el.placeholder : "", el.href ? "href: " + String(el.href).slice(0, 120) : ""].filter(Boolean).join(" ");
+    var type = el.getAttribute("type");
+    return {
+      id: String(i + 1),
+      text: text || null,
+      desc: desc || null,
+      viewId: el.tagName.toLowerCase() + (type ? "[" + type + "]" : ""),
+      clickable: true,
+      bounds: [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)]
+    };
+  });
+  var links = [], seen = {};
+  var as = document.querySelectorAll("a[href]");
+  for (var j = 0; j < as.length && links.length < 80; j++) {
+    var a = as[j], t = (a.innerText || a.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim().slice(0, 90);
+    if (!t || seen[a.href] || !/^https?:/.test(a.href)) continue;
+    seen[a.href] = 1;
+    links.push(t + " -> " + a.href.slice(0, 160));
+  }
+  return { nodes: nodes, text: ((document.body && document.body.innerText) || "").replace(/\\n{3,}/g, "\\n\\n").slice(0, 11000), links: links };
+}`;
+
 type Pending = { resolve: (a: ProxyAction) => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
 
 export class WebAgentTask {
@@ -66,11 +103,11 @@ export class WebAgentTask {
       for (let i = 0; i < spec.maxSteps; i++) {
         this.check();
         const page = this.page;
-        const { nodes, text } = await this.observe();
+        const { nodes, text, links } = await this.observe();
         const shot = (await page.screenshot({ type: "jpeg", quality: 60, timeout: 5_000 })).toString("base64");
         shots.push(shot);
         if (shots.length > 3) shots.shift();
-        visited.set(page.url(), text);
+        visited.set(page.url(), withLinks(text, links));
 
         const action = await this.ask({ goal, shot, nodes, history, url: page.url(), title: await page.title().catch(() => ""), text });
         this.check();
@@ -86,8 +123,8 @@ export class WebAgentTask {
         if (i === spec.maxSteps - 1) this.step("info", `Step limit (${spec.maxSteps}) reached; sending what was read`, 0.95);
       }
 
-      const { text } = await this.observe().catch(() => ({ text: "" }));
-      visited.set(this.page.url(), text);
+      const { text, links } = await this.observe().catch(() => ({ text: "", links: [] as string[] }));
+      visited.set(this.page.url(), withLinks(text, links));
       const evidenceText = [...visited.entries()]
         .map(([url, t]) => `## ${url}\n${t}`)
         .join("\n\n")
@@ -109,36 +146,10 @@ export class WebAgentTask {
   // ---------- Observe / ask / act ----------
 
   /** Numbers the visible interactive elements (data-co2lab-id) and reads the visible text. */
-  private async observe(): Promise<{ nodes: UiNode[]; text: string }> {
+  private async observe(): Promise<{ nodes: UiNode[]; text: string; links: string[] }> {
     const page = this.page!;
-    const r = await page.evaluate((max) => {
-      const vis = (el: Element) => {
-        const b = el.getBoundingClientRect();
-        const s = getComputedStyle(el);
-        return b.width > 2 && b.height > 2 && b.bottom > 0 && b.top < innerHeight && s.visibility !== "hidden" && s.display !== "none";
-      };
-      document.querySelectorAll("[data-co2lab-id]").forEach((e) => e.removeAttribute("data-co2lab-id"));
-      const els = [...document.querySelectorAll("a[href], button, input, textarea, select, [role=button], [role=link], [role=tab], [onclick]")]
-        .filter(vis)
-        .slice(0, max);
-      const nodes = els.map((el, i) => {
-        el.setAttribute("data-co2lab-id", String(i + 1));
-        const b = el.getBoundingClientRect();
-        const h = el as HTMLElement & { placeholder?: string; value?: string; href?: string };
-        const text = (h.innerText || h.value || h.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().slice(0, 80);
-        const desc = [h.placeholder ? `placeholder: ${h.placeholder}` : "", h.href ? `href: ${h.href.slice(0, 120)}` : ""].filter(Boolean).join(" ");
-        return {
-          id: String(i + 1),
-          text: text || null,
-          desc: desc || null,
-          viewId: el.tagName.toLowerCase() + (el.getAttribute("type") ? `[${el.getAttribute("type")}]` : ""),
-          clickable: true,
-          bounds: [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)] as [number, number, number, number],
-        };
-      });
-      return { nodes, text: (document.body?.innerText ?? "").replace(/\n{3,}/g, "\n\n").slice(0, 11_000) };
-    }, MAX_ELEMENTS);
-    return r;
+    // Plain-text script: a TypeScript function would carry build helpers (__name) the page does not have.
+    return (await page.evaluate(`(${OBSERVE_SCRIPT})(${MAX_ELEMENTS})`)) as { nodes: UiNode[]; text: string; links: string[] };
   }
 
   private ask(o: { goal: string; shot: string; nodes: UiNode[]; history: string[]; url: string; title: string; text: string }): Promise<ProxyAction> {
@@ -265,3 +276,8 @@ const hostOf = (u: string) => {
   }
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Page text plus its links, so the hub can see addresses (e.g. store.steampowered.com/app/<id>/). */
+function withLinks(text: string, links: string[]): string {
+  return links.length ? `${text}\n\nLinks on this page:\n${links.join("\n")}` : text;
+}
