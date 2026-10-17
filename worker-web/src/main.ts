@@ -15,6 +15,8 @@ import { HubClient } from "./hub-client.js";
 import { WebTask, VIEWPORT } from "./web-task.js";
 import { blankHtml } from "./reader-view.js";
 import { runEmbedJob } from "./compute/embed.js";
+import { deviceContext } from "./context.js";
+import { WebAgentTask } from "./web-agent.js";
 
 /** The hub rejected this device's token; the startup loop stops on this code instead of retrying. */
 const EXIT_REJECTED = 3;
@@ -65,7 +67,7 @@ const ctx: BrowserContext = await browser.newContext({ viewport: VIEWPORT });
 const idlePage: Page = await ctx.newPage();
 await idlePage.setContent(blankHtml(`${device.name} · connecting to ${device.hubUrl}`));
 
-const tasks = new Map<string, WebTask>();
+const tasks = new Map<string, WebTask | WebAgentTask>();
 const telemetry = new TelemetrySampler();
 await telemetry.start(HEARTBEAT_MS);
 
@@ -137,6 +139,12 @@ function onMessage(msg: HubToDevice): void {
     case "hello.ok":
       void idlePage.setContent(blankHtml(`${msg.name} · connected · waiting for a web subtask`)).catch(() => undefined);
       schedulePull(1_000);
+      void deviceContext(browserLabel)
+        .then((items) => {
+          hub.send({ type: "device.context", items });
+          log(`Shared with the hub: ${items.filter((i) => i.kind === "steam_game").length} installed Steam game(s), browser ${browserLabel}`);
+        })
+        .catch((e) => log(`Could not read device context: ${(e as Error).message}`));
       return;
     case "job.assign":
       if (computing) {
@@ -155,7 +163,7 @@ function onMessage(msg: HubToDevice): void {
         return;
       }
       log(`[${msg.subtaskId}] assigned: ${msg.goal}`);
-      const task = new WebTask(ctx, msg, (m) => hub.send(m), taskOpts);
+      const task = msg.agent ? new WebAgentTask(ctx, msg, (m) => hub.send(m)) : new WebTask(ctx, msg, (m) => hub.send(m), taskOpts);
       tasks.set(msg.subtaskId, task);
       void task.run().finally(() => tasks.delete(msg.subtaskId));
       return;
@@ -170,7 +178,8 @@ function onMessage(msg: HubToDevice): void {
       log(`Hub error ${msg.code}: ${msg.message}`);
       return;
     case "proxy.action":
-      return; // Android only
+      for (const t of tasks.values()) if (t instanceof WebAgentTask && t.onProxyAction(msg)) break;
+      return;
   }
 }
 

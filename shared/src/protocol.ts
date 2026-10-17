@@ -483,6 +483,8 @@ export const DeviceToHub = z.discriminatedUnion("type", [
     screenshot: z.string(),
     nodes: z.array(UiNode),
     history: z.array(z.string()),
+    /** Web agent: the page's URL and visible text, so Gemini can read what the screenshot shows. */
+    page: z.object({ url: z.string(), title: z.string(), text: z.string().max(12_000) }).optional(),
   }),
   // Compute jobs: an idle device asks for work it can run; it reports how the batch went.
   z.object({ type: z.literal("job.pull"), kinds: z.array(ComputeKind).min(1), cores: z.number().int().min(1) }),
