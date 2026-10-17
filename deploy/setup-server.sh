@@ -33,7 +33,7 @@ if [ ! -d "$APP_DIR/.git" ]; then git clone -q "$REPO" "$APP_DIR"; fi
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 # Dependencies, dashboard build, browser for the cloud worker
-sudo -u "$APP_USER" bash -c "cd $APP_DIR && npm ci --silent && npm run build -w dashboard --silent"
+sudo -u "$APP_USER" bash -c "cd $APP_DIR && npm ci --silent && npm run build -w dashboard --silent && npm run bundle -w worker-web"
 (cd "$APP_DIR/worker-web" && npx --yes playwright install-deps chromium >/dev/null)
 sudo -u "$APP_USER" bash -c "cd $APP_DIR/worker-web && npx playwright install chromium >/dev/null"
 

@@ -7,6 +7,7 @@
 import {
   ClientToHub,
   HubToClient,
+  type PendingDevice,
   pairingQrPayload,
   type Burn,
   type DeviceState,
@@ -92,6 +93,8 @@ export class MockHub {
   /** While > now, new sockets fail to connect (simulates hub/network loss). */
   downUntil = 0;
   pairCode: string | null = null;
+  /** Computers waiting for approval (device-code pairing). */
+  pendingDevices: PendingDevice[] = [];
   listeners = new Set<() => void>();
 
   constructor() {
@@ -157,6 +160,7 @@ export class MockHub {
       if (msg.role === "viewer" && (!msg.token || msg.token === "expired")) return sock.serverClose(4001, "link expired");
       sock.role = msg.role;
       this.sendTo(sock, this.snapshot(msg.role));
+      if (msg.role === "owner") this.sendTo(sock, this.deviceCodeList());
       return;
     }
     if (sock.role !== "owner") return; // viewers can only say hello
@@ -169,6 +173,22 @@ export class MockHub {
         this.notify();
         return;
       }
+      case "devicecode.approve": {
+        const p = this.pendingDevices.find((x) => x.userCode === msg.userCode);
+        if (!p) return this.sendTo(sock, { type: "error", code: "devicecode_not_found", message: "no pending device with that code" });
+        this.pendingDevices = this.pendingDevices.filter((x) => x !== p);
+        const id = this.id("dev");
+        this.addDevice({ id, name: msg.name ?? p.name, kind: p.kind, capabilities: p.capabilities, state: "idle", telemetry: { batteryPct: p.info.hasBattery ? 71 : null, charging: p.info.hasBattery ? true : null, tempC: 40, cpuPct: 9 }, lastSeenAt: Date.now(), currentTask: null, note: null });
+        this.pushDevice(id);
+        this.broadcastOwners(this.deviceCodeList());
+        this.notify();
+        return;
+      }
+      case "devicecode.deny":
+        this.pendingDevices = this.pendingDevices.filter((x) => x.userCode !== msg.userCode);
+        this.broadcastOwners(this.deviceCodeList());
+        this.notify();
+        return;
       case "device.revoke":
         return this.revoke(msg.deviceId);
       case "viewer.create": {
@@ -285,6 +305,33 @@ export class MockHub {
     this.forced.set(id, "offline");
     this.patch(id, { state: "offline", currentTask: null, note: null, lastSeenAt: Date.now() - 6000 });
     this.requeueFrom(id);
+  }
+
+  private deviceCodeList(): HubToClient {
+    return { type: "devicecode.list", hubUrl: location.origin, pending: this.pendingDevices };
+  }
+
+  private broadcastOwners(msg: HubToClient) {
+    for (const s of this.sockets) if (s.role === "owner") this.sendTo(s, msg);
+  }
+
+  /** A computer ran the install one-liner and is waiting for approval. */
+  requestJoin() {
+    const letters = "BCDFGHJKLMNPQRSTVWXZ";
+    const pick = () => Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]).join("");
+    const now = Date.now();
+    this.pendingDevices.push({
+      userCode: `${pick()}-${pick()}`,
+      name: "Old ThinkPad",
+      kind: "laptop",
+      capabilities: ["web"],
+      info: { hostname: "THINKPAD-T480", os: "Microsoft Windows 10 Home 10.0.19045", arch: "x64", model: "Lenovo ThinkPad T480", cpu: "Intel Core i5-8250U (8 threads)", ramGb: 8, hasBattery: true, browser: "Microsoft Edge" },
+      ip: "203.0.113.7",
+      createdAt: now,
+      expiresAt: now + 10 * 60_000,
+    });
+    this.broadcastOwners(this.deviceCodeList());
+    this.notify();
   }
 
   pairDevice() {

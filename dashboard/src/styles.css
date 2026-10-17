@@ -1611,3 +1611,28 @@ code {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ---------- add device: install one-liner + pending approvals ---------- */
+.seg { display: flex; gap: 4px; padding: 4px; background: var(--card-edge); border-radius: var(--radius-sm); margin-bottom: 14px; }
+.seg__btn { flex: 1; border: 0; background: none; padding: 8px; border-radius: 9px; font: inherit; font-weight: 700; color: var(--ink-2); cursor: pointer; }
+.seg__btn--on { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+.join { display: flex; flex-direction: column; gap: 10px; }
+.cmd__label, .join__note { margin: 0 0 4px; color: var(--ink-2); font-size: 0.85rem; }
+.cmd__row { display: flex; gap: 8px; align-items: center; }
+.cmd__text { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 8px 10px; background: #fffaf0; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 0.85rem; }
+.join__title { margin: 8px 0 0; font-size: 1rem; }
+.join__missing { margin: 0; color: var(--red); }
+.pending-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pending { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.pending--match { border-color: var(--green); background: var(--green-soft); }
+.pending__head { display: flex; gap: 8px; align-items: center; }
+.pending__code { font-weight: 800; font-size: 1.2rem; letter-spacing: 0.08em; }
+.pending__kind { font-size: 0.8rem; padding: 2px 8px; border-radius: 99px; background: var(--gray-pill); }
+.pending__timer { margin-left: auto; font-weight: 700; color: var(--green-deep); font-variant-numeric: tabular-nums; }
+.pending__timer--low { color: var(--red); }
+.pending__hint { margin: 0; font-size: 0.85rem; color: var(--green-deep); }
+.pending__name { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; color: var(--ink-2); }
+.pending__facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 4px 12px; font-size: 0.8rem; }
+.pending__facts dt { color: var(--muted); }
+.pending__facts dd { margin: 0; overflow-wrap: anywhere; }
+.pending__actions { display: flex; gap: 12px; align-items: center; }

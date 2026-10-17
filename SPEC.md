@@ -67,13 +67,28 @@ Fallback rule: if an app fails live, its subtask shows "failed: <reason>" on the
 
 ### 4.1 Pair a device
 
-1. Owner opens dashboard → **Add device**. Hub creates a pairing code: 6 digits, single use, expires in 5 min. Dashboard shows the code and a QR of `co2lab://pair?hub=<url>&code=<code>`.
-2. Android: open Co2lab app → **Scan QR** (or type hub URL + code). Laptop: `npm run pair -- <code>` in `worker-web/` (hub URL from `.env`).
-3. Device calls `POST /api/pair {code, name, kind, capabilities}`. Hub validates, creates `Device`, returns `{deviceId, token}`. Hub stores only `sha256(token)`. The device then opens `/ws` with `hello {role: device, token}`.
-4. Device saves token (Android: EncryptedSharedPreferences; laptop: `worker-web/.device.json`, gitignored).
-5. New tree card appears. Android app then walks the user through enabling the Accessibility Service and a battery-optimization exemption.
+Owner opens dashboard → **Add device**. The dialog has two tabs.
 
-Failure: wrong or expired code → `pair.error` with reason, the device shows it, the code is not consumed on failure (max 5 attempts per code).
+**Laptop or desktop (device code, one command, no git):**
+
+1. The dialog shows `irm https://<hub>/install.ps1 | iex` (Windows) and `curl -fsSL https://<hub>/install.sh | sh` (macOS/Linux) with the hub URL filled in.
+2. The installer finds Node 22+ or downloads portable Node 24 LTS from nodejs.org (SHA-256 checked, no admin) into `%LOCALAPPDATA%\co2lab\node`, downloads the prebuilt worker from `/install/worker.tgz` into `%LOCALAPPDATA%\co2lab\worker`, asks whether to start it at login (Startup folder shortcut; systemd user unit or LaunchAgent on Linux/macOS), then runs it.
+3. The worker detects the computer with systeminformation: `laptop` if it has a battery or a portable chassis, else `desktop`; the name is the hostname, or the model when the hostname is a placeholder like `DESKTOP-AB12CDE`; OS, model, CPU, RAM, battery, and the browser it can drive. It calls `POST /api/device-code` and prints a code like `FLSX-TPJL`, the URL `https://<hub>/approve?code=FLSX-TPJL` and a QR of that URL.
+4. The owner opens the URL (logs in if needed), sees the detected device in **Waiting for approval**, checks the code, optionally renames it, and clicks **Approve** (or **Deny**).
+5. The worker, polling every 3 s, receives `{deviceId, token}`, saves it to `.device.json`, connects, and the tree card appears.
+6. Browser: Playwright drives the system Edge (`channel: "msedge"`), else Chrome, else downloads Playwright Chromium once.
+
+Codes expire after 10 min (the worker then asks for a new one); 5 requests per IP per 10 min and 20 pending in total; nothing gets a token without the owner. If the hub later rejects the token (revoked), the worker moves `.device.json` aside and exits with code 3, so running the installer again asks for approval again.
+
+Why a hub-served bundle and not `npx <package>`: no npm account or public package to publish, the worker always matches the hub version, and the hub URL is already in the script. The bundle is one esbuild file plus `playwright-core` (about 3.5 MB), built on the hub by `npm run bundle -w worker-web`.
+
+**Android phone (6-digit code):**
+
+1. Hub creates a pairing code: 6 digits, single use, expires in 5 min. Dashboard shows the code and a QR of `co2lab://pair?hub=<url>&code=<code>`.
+2. Open the CO2LAB app → **Scan QR** (or type hub URL + code). The app calls `POST /api/pair {code, name, kind, capabilities}`. Hub creates the `Device` and returns `{deviceId, token}`. The device then opens `/ws` with `hello {role: device, token}`.
+3. The app saves the token (EncryptedSharedPreferences), then walks the user through enabling the Accessibility Service and a battery-optimization exemption.
+
+Either way the hub stores only `sha256(token)`. Failure: wrong or expired code → `400 {error}`, the device shows it, the code is not consumed on failure (max 5 attempts per code). The legacy laptop flow `npm run pair -- <6-digit code>` in `worker-web/` still works.
 
 ### 4.2 Run a deal hunt
 
@@ -179,12 +194,12 @@ Screenshots are stored on the hub disk (`hub/data/frames/`) and referenced by pa
 
 Endpoint `wss://<hub>/ws`. First message authenticates: `hello {role: device|owner|viewer, token}`.
 
-HTTP: `POST /api/login`, `POST /api/logout`, `POST /api/pair`, `GET /api/health`. See `shared/PROTOCOL.md`.
+HTTP: `POST /api/login`, `POST /api/logout`, `POST /api/pair`, `POST /api/device-code`, `POST /api/device-code/poll`, `GET /api/health`, `GET /install.ps1`, `GET /install.sh`, `GET /install/worker.tgz`. See `shared/PROTOCOL.md`.
 
 - Device → hub: `heartbeat {telemetry}`, `frame {subtaskId?, jpegBase64}`, `step`, `subtask.result {evidence: images/text}` (hub extracts deals with Gemini), `subtask.failed`, `proxy.request {subtaskId, screenshot, nodes}`
 - Hub → device: `hello.ok`, `subtask.assign {subtaskId, capability, goal, config}`, `subtask.cancel`, `proxy.action`, `error`
-- Owner → hub: `run.create`, `pair.start`, `device.revoke`, `viewer.create`, `research.*`, `approval.respond`
-- Hub → owner/viewer: `state.snapshot`, `device.update`, `frame`, `run.update`, `run.done`, `research.update`
+- Owner → hub: `run.create`, `pair.start`, `devicecode.approve`, `devicecode.deny`, `device.revoke`, `viewer.create`, `research.*`, `approval.respond`
+- Hub → owner/viewer: `state.snapshot`, `devicecode.list` (owners only), `device.update`, `frame`, `run.update`, `run.done`, `research.update`
 
 Viewers receive only hub → client events and cannot send commands.
 
@@ -273,4 +288,5 @@ Resolved: Gemini key and models; Vultr, Tiger Data and Papiers accounts; app pac
 
 - Done and verified live: T0, T1, T2, T3, T4, T5, T8. Full hunt on the Vultr hub: A54 read Tim Hortons, McDonald's and Popeyes in their apps, the laptop read RedFlagDeals, the laptop was cut off mid-run, and the Cloud worker finished its job within about 6 s; merged ranking cost about 26k tokens (≈ $0.03).
 - Next: T6 (Tiger Data), T7 (Research Mode), then N1 (WhatsApp), polish, Devpost.
-- Deploy: `bash deploy/deploy.sh` ships pushed code; add `--env` to re-upload `.env`.
+- Deploy: `bash deploy/deploy.sh` ships pushed code (and rebuilds the worker bundle the installer serves); add `--env` to re-upload `.env`.
+- Laptop onboarding (device code + one-line installer): verified locally on Windows 11 with Node removed from PATH: the installer downloaded Node 24, the worker detected the laptop and used the system Edge, one Approve click paired and connected it. Hub e2e passes.
