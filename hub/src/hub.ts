@@ -453,6 +453,7 @@ export class Hub {
       case "research.capture":
       case "research.label":
       case "research.propose":
+      case "research.cancel":
       case "research.feedback":
         try {
           await this.research.handle(msg);

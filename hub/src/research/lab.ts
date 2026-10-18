@@ -64,6 +64,11 @@ export class ResearchLab {
   private feedback: FeedbackRecord[] = [];
   private findings: FindingRecord[] = [];
   private busy: string | null = null;
+  /** Whether the running job is a proposal the owner may cancel. */
+  private cancellable = false;
+  private jobSeq = 0;
+  /** A job whose seq is <= this was cancelled; its result is dropped. */
+  private cancelledSeq = 0;
 
   constructor(private deps: LabDeps) {}
 
@@ -182,6 +187,7 @@ export class ResearchLab {
         .sort((a, b) => b.createdAt - a.createdAt)
         .map((f) => ({ id: f.id, experimentId: f.experimentId, summary: f.summary, papiersRef: f.papiersRef, createdAt: f.createdAt })),
       busy: this.busy,
+      cancellable: this.cancellable,
       models: { ...config.gemini.models },
       store: this.deps.store.kind,
     };
@@ -200,23 +206,47 @@ export class ResearchLab {
         return this.startCapture(msg.app);
       case "research.label":
         return this.label(msg.captureId, msg.deals, msg.labels ?? []);
-      case "research.propose":
-        this.startJob("Research agent is reading Papiers and writing a hypothesis…", () => this.propose(null, null));
+      case "research.propose": {
+        const idea = msg.idea?.trim();
+        // The owner's own idea steers like a redirect on the latest experiment, so the new proposal cites it.
+        const latest = this.sortedExperiments().filter((e) => !this.view(e).supersededBy).at(-1);
+        if (idea && latest && (latest.status === "analyzed" || latest.status === "proposed") && !(latest.error && !latest.configs.length))
+          return this.onFeedback(latest.id, "redirect", idea);
+        this.startJob("Research agent is reading Papiers and writing a hypothesis…", () => this.propose(null, null, idea || null), true);
         return;
+      }
+      case "research.cancel":
+        return this.cancelProposal();
       case "research.feedback":
         return this.onFeedback(msg.experimentId, msg.kind, msg.text);
     }
   }
 
-  private startJob(what: string, job: () => Promise<void>) {
+  /** `cancellable`: a proposal job, which the owner may stop (its result is then dropped). Trials are not. */
+  private startJob(what: string, job: () => Promise<void>, cancellable = false) {
     if (this.busy) throw new UserError(`The research agent is busy: ${this.busy}`);
+    const seq = ++this.jobSeq;
     this.busy = what;
+    this.cancellable = cancellable;
     log.info(`research: ${what}`);
     void job()
       .catch((e) => log.error(`research job "${what}"`, e))
       .finally(() => {
-        this.busy = null;
+        if (this.jobSeq === seq) {
+          this.busy = null;
+          this.cancellable = false;
+        }
       });
+  }
+
+  private cancelProposal() {
+    if (!this.busy) return;
+    if (!this.cancellable) throw new UserError("Trials can't be cancelled; wait for the analysis");
+    log.info(`research: owner cancelled "${this.busy}"`);
+    this.cancelledSeq = this.jobSeq;
+    this.jobSeq++; // the running job's finally() no longer owns busy
+    this.busy = null;
+    this.cancellable = false;
   }
 
   // ---------- 1. Live capture ----------
@@ -355,7 +385,8 @@ export class ResearchLab {
     };
   }
 
-  private async propose(parent: ExperimentRecord | null, revising: ExperimentRecord | null) {
+  private async propose(parent: ExperimentRecord | null, revising: ExperimentRecord | null, idea: string | null = null) {
+    const seq = this.jobSeq;
     const parentRec = parent ?? revising ?? this.sortedExperiments().at(-1) ?? null;
     const pending = this.pendingFeedback();
     const draft: ExperimentRecord = {
@@ -378,7 +409,11 @@ export class ResearchLab {
       const problem = geminiProblem("pro") ?? geminiProblem("lite");
       if (problem) throw new Error(problem);
       const focus =
-        pending.map((f) => `${f.kind}: ${f.text}`).join("; ") || parentRec?.nextProposal || parentRec?.hypothesis || RESEARCH_QUESTION;
+        (idea ? `owner's idea: ${idea}` : "") ||
+        pending.map((f) => `${f.kind}: ${f.text}`).join("; ") ||
+        parentRec?.nextProposal ||
+        parentRec?.hypothesis ||
+        RESEARCH_QUESTION;
       const papiers = await gatherPapiers(focus, this.usageLog("queries"));
       const history: PastExperiment[] = this.sortedExperiments()
         .filter((e) => e.configs.length)
@@ -395,7 +430,7 @@ export class ResearchLab {
         feedback: pending.map((f) => ({ id: f.id, kind: f.kind, text: f.text, on: this.experiments.get(f.experimentId)?.title ?? "?" })),
         apps: this.labeledCaptures().map((c) => c.app),
         papiers,
-        revising: revising ? `${revising.title}: ${revising.hypothesis}` : null,
+        revising: revising ? `${revising.title}: ${revising.hypothesis}` : idea ? `The owner asked to test this (design the experiment around it): ${idea}` : null,
         onUsage: this.usageLog("propose"),
       });
       Object.assign(draft, {
@@ -412,6 +447,10 @@ export class ResearchLab {
       draft.hypothesis = "The research agent could not write a hypothesis.";
       draft.error = (e as Error).message;
       log.error("research propose", e);
+    }
+    if (seq <= this.cancelledSeq) {
+      log.info(`research: dropped the cancelled proposal "${draft.title}"`);
+      return;
     }
     this.experiments.set(draft.id, draft);
     await this.deps.store.upsertExperiment(draft);
@@ -450,9 +489,9 @@ export class ResearchLab {
 
     if (e.status === "proposed") {
       if (kind === "approve") this.startJob(`Running trials for "${e.title}"…`, () => this.runTrials(e));
-      else if (kind === "redirect") this.startJob("Research agent is revising the proposal…", () => this.propose(null, e));
+      else if (kind === "redirect") this.startJob("Research agent is revising the proposal…", () => this.propose(null, e), true);
     } else if (e.status === "analyzed" && kind !== "flag") {
-      this.startJob("Research agent is writing the next hypothesis…", () => this.propose(e, null));
+      this.startJob("Research agent is writing the next hypothesis…", () => this.propose(e, null), true);
     }
   }
 

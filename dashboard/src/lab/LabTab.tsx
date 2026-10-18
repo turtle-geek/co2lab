@@ -48,6 +48,7 @@ function useResearch(experiments: ExperimentView[]) {
 export default function LabTab({ experiments, readOnly, connected, send }: LabProps) {
   const { data, error, reload } = useResearch(experiments);
   const [labeling, setLabeling] = useState<string | null>(null);
+  const [idea, setIdea] = useState("");
   const can = !readOnly && connected;
   const act = (msg: Parameters<typeof send>[0]) => {
     send(msg);
@@ -88,11 +89,34 @@ export default function LabTab({ experiments, readOnly, connected, send }: LabPr
               <span className="spinner" aria-hidden /> {data.busy}
             </p>
           )}
-          {!readOnly && (
-            <button className="btn btn--primary" disabled={!can || !!data?.busy} onClick={() => act({ type: "research.propose" })}>
-              Propose an experiment
-            </button>
-          )}
+          {!readOnly &&
+            (data?.busy && data.cancellable ? (
+              <button className="btn" disabled={!can} onClick={() => act({ type: "research.cancel" })}>
+                Cancel
+              </button>
+            ) : (
+              <form
+                className="lab-idea"
+                onSubmit={(ev) => {
+                  ev.preventDefault();
+                  act({ type: "research.propose", idea: idea.trim() || undefined });
+                  setIdea("");
+                }}
+              >
+                <input
+                  className="input"
+                  value={idea}
+                  maxLength={500}
+                  onChange={(ev) => setIdea(ev.target.value)}
+                  placeholder="Your idea (optional), e.g. test Lite in vision mode"
+                  aria-label="What to test"
+                  disabled={!can || !!data?.busy}
+                />
+                <button className="btn btn--primary" disabled={!can || !!data?.busy}>
+                  {idea.trim() ? "Propose this" : "Propose an experiment"}
+                </button>
+              </form>
+            ))}
         </div>
       </section>
       {error && <p className="lab-error">{error}</p>}

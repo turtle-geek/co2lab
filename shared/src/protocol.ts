@@ -389,6 +389,8 @@ export const ResearchState = z.object({
   findings: z.array(FindingView),
   /** What the research agent is doing right now, if anything. */
   busy: z.string().nullable(),
+  /** The busy job is a proposal the owner may cancel. */
+  cancellable: z.boolean().optional(),
   /** Model ids behind each tier on this hub (the free tier maps pro to the flash model). */
   models: z.record(z.string(), z.string()),
   store: z.string(),
@@ -631,7 +633,10 @@ export const ClientToHub = z.discriminatedUnion("type", [
     /** The owner's per-deal verdicts that produced `deals` (kept for the record). */
     labels: z.array(LabelItem).optional(),
   }),
-  z.object({ type: z.literal("research.propose") }),
+  /** `idea`: what the owner wants tested, in their words; the agent turns it into the experiment. */
+  z.object({ type: z.literal("research.propose"), idea: z.string().trim().max(500).optional() }),
+  /** Stop the research agent while it is writing a proposal; its draft is discarded. */
+  z.object({ type: z.literal("research.cancel") }),
   z.object({
     type: z.literal("research.feedback"),
     experimentId: z.string(),

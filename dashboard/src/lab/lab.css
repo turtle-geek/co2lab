@@ -87,3 +87,8 @@
 .exp__next { margin: 0; font-size: 0.88rem; color: var(--ink-2); }
 .exp__more > summary { cursor: pointer; color: var(--muted); font-weight: 700; font-size: 0.85rem; }
 .exp__more[open] { display: grid; gap: 8px; }
+
+/* Propose: optional idea in your own words */
+.lab-idea { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; justify-content: flex-end; }
+.lab-idea .input { width: 280px; min-width: 0; }
+@media (max-width: 560px) { .lab-idea { flex-wrap: wrap; } .lab-idea .input { width: 100%; } }
