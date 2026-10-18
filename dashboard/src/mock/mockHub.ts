@@ -15,6 +15,7 @@ import {
   type RankedDeal,
   type RunView,
   type SubtaskView,
+  type TelemetryPoint,
 } from "@co2lab/shared";
 import type { SocketLike } from "../net/connection";
 import type { Backend } from "../net/backend";
@@ -96,14 +97,51 @@ export class MockHub {
   /** Computers waiting for approval (device-code pairing). */
   pendingDevices: PendingDevice[] = [];
   listeners = new Set<() => void>();
+  /** Telemetry readings per device, like the hub's telemetry table (seeded with an hour of history). */
+  history = new Map<string, TelemetryPoint[]>();
 
   constructor() {
     const now = Date.now();
+    this.seedHistory(now);
     this.addDevice({ id: "dev-a54", name: "Galaxy A54", kind: "android", capabilities: ["app:tims", "app:mcdonalds", "app:popeyes", "app:whatsapp"], state: "idle", telemetry: { batteryPct: 82, charging: true, tempC: 31, cpuPct: 12 }, lastSeenAt: now, currentTask: null, note: null });
     this.addDevice({ id: "dev-dragonfly", name: "Dragonfly", kind: "laptop", capabilities: ["web"], state: "idle", telemetry: { batteryPct: 67, charging: false, tempC: 35, cpuPct: 18 }, lastSeenAt: now, currentTask: null, note: null });
     this.addDevice({ id: "dev-cloud", name: "Cloud worker", kind: "cloud", capabilities: ["web"], state: "idle", telemetry: { batteryPct: null, charging: null, tempC: null, cpuPct: 4 }, lastSeenAt: now, currentTask: null, note: null });
     setInterval(() => this.heartbeat(), 2000);
     setInterval(() => this.work(), 1000);
+  }
+
+  /** An hour of plausible readings: the phone charges and warms up during a task, the laptop drains. */
+  private seedHistory(now: number) {
+    const a54: TelemetryPoint[] = [];
+    const fly: TelemetryPoint[] = [];
+    for (let i = 360; i > 0; i--) {
+      const time = now - i * 10_000;
+      const min = (i * 10) / 60; // minutes ago
+      const bump = (from: number, to: number, peak: number) => (min <= from && min >= to ? peak * Math.sin(((from - min) / (from - to)) * Math.PI) : 0);
+      const jitter = () => Math.random() * 0.8;
+      a54.push({ time, batteryPct: Math.min(100, 64 + (60 - min) * 0.3), charging: true, tempC: 30.5 + jitter() + bump(28, 16, 7.5) + bump(9, 5, 3) });
+      fly.push({ time, batteryPct: 80 - (60 - min) * 0.22, charging: false, tempC: 31.5 + jitter() + bump(27, 15, 17) + bump(9, 5, 7) });
+    }
+    this.history.set("dev-a54", a54);
+    this.history.set("dev-dragonfly", fly);
+  }
+
+  telemetryHistory(deviceId: string, minutes: number): TelemetryPoint[] {
+    const since = Date.now() - minutes * 60_000;
+    const bucket = 30_000;
+    const groups = new Map<number, TelemetryPoint[]>();
+    for (const p of this.history.get(deviceId) ?? []) {
+      if (p.time < since) continue;
+      const b = Math.floor(p.time / bucket) * bucket;
+      groups.set(b, [...(groups.get(b) ?? []), p]);
+    }
+    const avg = (xs: (number | null)[]) => {
+      const v = xs.filter((x): x is number => x !== null);
+      return v.length ? v.reduce((a, c) => a + c, 0) / v.length : null;
+    };
+    return [...groups.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([time, ps]) => ({ time, batteryPct: avg(ps.map((p) => p.batteryPct)), tempC: avg(ps.map((p) => p.tempC)), charging: ps.some((p) => p.charging) }));
   }
 
   private addDevice(d: DeviceView) {
@@ -267,6 +305,10 @@ export class MockHub {
           cpuPct: Math.round((working ? 55 : 8) + Math.random() * 15),
         },
       });
+      const now = this.devices.get(d.id)!.telemetry!;
+      const h = this.history.get(d.id) ?? [];
+      h.push({ time: Date.now(), batteryPct: now.batteryPct, tempC: now.tempC, charging: now.charging });
+      this.history.set(d.id, h.slice(-4000));
       this.pushDevice(d.id);
     }
   }
@@ -639,6 +681,10 @@ export const mockBackend: Backend = {
   },
   async logout() {
     sessionStorage.removeItem(LOGIN_KEY);
+  },
+  async telemetryHistory(deviceId, minutes) {
+    await new Promise((r) => setTimeout(r, 150));
+    return mockHub.telemetryHistory(deviceId, minutes);
   },
   DevPanel: MockPanel,
 };

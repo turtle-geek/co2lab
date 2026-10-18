@@ -6,6 +6,7 @@ import { DeviceGrid } from "./components/DeviceGrid";
 import { AskBar, BurnMeter } from "./components/AskBar";
 import { LiveScreens, screenDevices } from "./components/LiveScreens";
 import { RunBanner } from "./components/TeamStrip";
+import { DeviceHealth } from "./components/DeviceHealth";
 import { Approvals, Results } from "./components/Results";
 import { PairDialog, ShareDialog } from "./components/Dialogs";
 import { Expired, Login } from "./components/Login";
@@ -23,7 +24,10 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
   const [approveCode] = useState(() => (location.pathname === "/approve" ? new URLSearchParams(location.search).get("code") ?? "" : null));
   const [pairOpen, setPairOpen] = useState(approveCode !== null);
   const [shareOpen, setShareOpen] = useState(false);
+  /** Device whose battery/temperature graphs are open on the Devices tab. */
+  const [healthId, setHealthId] = useState<string | null>(null);
   const DevPanel = backend.DevPanel;
+  const healthDevice = healthId ? state.devices.find((d) => d.id === healthId && d.state !== "revoked") : undefined;
 
   const readOnly = role === "viewer" || state.role === "viewer";
   const connected = status === "open";
@@ -203,6 +207,9 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
                 onAdd={openPair}
                 onRevoke={(id) => hub.send({ type: "device.revoke", deviceId: id })}
                 onRename={(id, name) => hub.send({ type: "device.rename", deviceId: id, name })}
+                selectedId={healthId}
+                onSelect={(id) => setHealthId((cur) => (cur === id ? null : id))}
+                detail={healthDevice && <DeviceHealth device={healthDevice} load={backend.telemetryHistory} onClose={() => setHealthId(null)} />}
               />
             </>
           )}

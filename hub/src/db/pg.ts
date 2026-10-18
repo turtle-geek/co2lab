@@ -2,6 +2,7 @@
 // when DATABASE_URL is set. Writes go through one ordered queue so a subtask never lands before
 // its run, and repeated upserts of the same row that are still waiting collapse into one.
 
+import type { TelemetryPoint } from "@co2lab/shared";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type pg from "pg";
@@ -132,6 +133,19 @@ export class PgRepository implements Repository {
         v,
       );
     });
+  }
+
+  async telemetryHistory(deviceId: string, sinceMs: number, bucketMs: number): Promise<TelemetryPoint[]> {
+    await this.flush();
+    const { rows } = await this.q(
+      `select time_bucket(make_interval(secs => $3), time) as b,
+              avg(battery_pct)::float8 as battery, avg(temp_c)::float8 as temp, bool_or(charging) as charging
+         from telemetry
+        where device_id = $1 and time >= $2 and online
+        group by b order by b`,
+      [deviceId, ts(sinceMs), bucketMs / 1000],
+    );
+    return rows.map((r) => ({ time: new Date(r.b).getTime(), batteryPct: r.battery, tempC: r.temp, charging: r.charging }));
   }
 
   appendStep(s: StepRow) {

@@ -1910,3 +1910,37 @@ code {
 .tree-card__save { color: var(--green-deep); }
 .tree-card__save:disabled { opacity: 0.4; }
 .tree-card__rename .link-btn { font-size: 0.8rem; }
+
+/* Device graphs (tap a card): last hour of temperature and battery, each with its limit */
+.card-slot--selected .tree-card { box-shadow: 0 0 0 2px var(--green), var(--shadow); }
+/* dense flow: the detail spans the next row and later cards backfill the selected card's row */
+.device-grid { grid-auto-flow: row dense; }
+.device-grid__detail { grid-column: 1 / -1; min-width: 0; }
+.health { animation: screen-in 0.25s ease both; }
+.health__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.health__span { color: var(--muted); font-weight: 600; }
+.health__why { margin: 2px 0 12px; color: var(--ink-2); font-size: 0.92rem; max-width: 62ch; }
+.health__stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.health__stat { display: flex; flex-direction: column; flex: 1 1 0; max-width: 180px; min-width: 0; background: #fff; border: 1px solid var(--card-edge); border-radius: var(--radius-sm); padding: 8px 12px; }
+.health__stat b { font-size: 1.25rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+.health__stat span { font-size: 0.78rem; color: var(--muted); }
+.chart { margin: 0 0 14px; }
+.chart__head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.chart__title { font-weight: 800; color: var(--ink); font-size: 0.95rem; }
+.chart__now { color: var(--ink-2); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.chart__plot { position: relative; width: 100%; background: #fff; border: 1px solid var(--card-edge); border-radius: var(--radius-sm); overflow: hidden; }
+.chart__plot svg { display: block; touch-action: pan-y; }
+.chart__grid { stroke: var(--line); stroke-width: 1; }
+.chart__tick { fill: var(--muted); font-size: 11px; font-family: inherit; }
+.chart__line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart__area { opacity: 0.1; }
+.chart__limit { stroke: var(--amber); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.chart__danger { fill: var(--red-soft); opacity: 0.55; }
+.chart__band { fill: var(--green); opacity: 0.55; }
+.chart__cross { stroke: var(--ink-2); stroke-width: 1; opacity: 0.35; }
+.chart__limit-label { position: absolute; right: 14px; transform: translateY(-120%); font-size: 0.72rem; font-weight: 700; color: #9a6a1c; background: rgba(255, 255, 255, 0.85); padding: 0 4px; border-radius: 4px; pointer-events: none; }
+.chart__band-label { position: absolute; top: 9px; margin-left: 4px; font-size: 0.72rem; font-weight: 700; color: var(--green-deep); pointer-events: none; }
+.chart__dot { position: absolute; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 2px #fff; transform: translate(-50%, -50%); pointer-events: none; }
+.chart__tip { position: absolute; transform: translate(10px, -130%); white-space: nowrap; background: var(--ink); color: #fff; font-size: 0.78rem; padding: 3px 8px; border-radius: 8px; pointer-events: none; }
+.chart__tip b { color: #fff; }
+.chart__tip--left { transform: translate(calc(-100% - 10px), -130%); }

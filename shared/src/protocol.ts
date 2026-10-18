@@ -175,6 +175,14 @@ export const DeviceView = z.object({
 });
 export type DeviceView = z.infer<typeof DeviceView>;
 
+/** One bucket of a device's stored telemetry (GET /api/devices/:id/telemetry). */
+export interface TelemetryPoint {
+  time: number;
+  batteryPct: number | null;
+  tempC: number | null;
+  charging: boolean | null;
+}
+
 export const SubtaskStatus = z.enum(["queued", "running", "done", "failed", "cancelled"]);
 export const SubtaskView = z.object({
   id: z.string(),

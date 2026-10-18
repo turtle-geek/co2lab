@@ -1,3 +1,4 @@
+import type { TelemetryPoint } from "@co2lab/shared";
 import type {
   DealRecord,
   DeviceRecord,
@@ -32,6 +33,22 @@ export class MemoryRepository implements Repository {
     this.telemetry.push(t);
     if (this.telemetry.length > MAX_ROWS) this.telemetry.splice(0, this.telemetry.length - MAX_ROWS);
   }
+  async telemetryHistory(deviceId: string, sinceMs: number, bucketMs: number): Promise<TelemetryPoint[]> {
+    const buckets = new Map<number, TelemetryRow[]>();
+    for (const r of this.telemetry) {
+      if (r.deviceId !== deviceId || r.time < sinceMs || !r.online) continue;
+      const b = Math.floor(r.time / bucketMs) * bucketMs;
+      buckets.set(b, [...(buckets.get(b) ?? []), r]);
+    }
+    const avg = (xs: (number | null)[]) => {
+      const v = xs.filter((x): x is number => x !== null);
+      return v.length ? v.reduce((a, c) => a + c, 0) / v.length : null;
+    };
+    return [...buckets.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([time, rs]) => ({ time, batteryPct: avg(rs.map((r) => r.batteryPct)), tempC: avg(rs.map((r) => r.tempC)), charging: rs.some((r) => r.charging) }));
+  }
+
   async appendStep(s: StepRow) {
     this.steps.push(s);
     if (this.steps.length > MAX_ROWS) this.steps.splice(0, this.steps.length - MAX_ROWS);

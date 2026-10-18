@@ -130,6 +130,18 @@ app.get("/api/evidence/:file", async (req: FastifyRequest<{ Params: { file: stri
   }
 });
 
+// ---------- Device telemetry history (Devices tab graphs) ----------
+
+app.get(
+  "/api/devices/:id/telemetry",
+  async (req: FastifyRequest<{ Params: { id: string }; Querystring: { viewer?: string; minutes?: string } }>, reply) => {
+    if (!isOwner(req) && !(await hub.viewerTokenValid(req.query.viewer))) return reply.code(401).send({ error: "unauthorized" });
+    const minutes = Math.min(24 * 60, Math.max(5, Number(req.query.minutes) || 60));
+    const bucketMs = Math.max(10_000, Math.round((minutes * 60_000) / 120 / 10_000) * 10_000); // ~120 points
+    return { points: await repo.telemetryHistory(req.params.id, Date.now() - minutes * 60_000, bucketMs), bucketMs };
+  },
+);
+
 // ---------- Research Mode (Lab tab) ----------
 
 type ViewerQuery = FastifyRequest<{ Querystring: { viewer?: string } }>;

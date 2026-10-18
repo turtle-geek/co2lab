@@ -2,7 +2,7 @@
 // implementation under hub/src/db/ and swaps it in via createRepository() in index.ts.
 // Runtime-only state (sockets, last heartbeat, latest frame) is NOT stored here.
 
-import type { AgentConfig, Burn, Capability, Deal, DealSource, DeviceKind, RankedDeal, RunAnswer, StepKind } from "@co2lab/shared";
+import type { TelemetryPoint, AgentConfig, Burn, Capability, Deal, DealSource, DeviceKind, RankedDeal, RunAnswer, StepKind } from "@co2lab/shared";
 
 export interface DeviceRecord {
   id: string;
@@ -93,6 +93,8 @@ export interface Repository {
   listDevices(): Promise<DeviceRecord[]>;
 
   appendTelemetry(t: TelemetryRow): Promise<void>;
+  /** Stored telemetry since `sinceMs`, averaged into buckets of `bucketMs` (online rows only). */
+  telemetryHistory(deviceId: string, sinceMs: number, bucketMs: number): Promise<TelemetryPoint[]>;
   appendStep(s: StepRow): Promise<void>;
 
   upsertRun(r: RunRecord): Promise<void>;
