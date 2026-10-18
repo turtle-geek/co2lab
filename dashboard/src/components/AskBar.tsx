@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Burn, DeviceView, RunView } from "@co2lab/shared";
 import { fmtUsd } from "../format";
-import { deviceUse, embodied, fmtGrams, oldDevices } from "../footprint";
+import { NEW_MACHINE, deviceUse, fmtGrams } from "../footprint";
 
 const EXAMPLE = "Best lunch deals near UTSC today";
 
@@ -92,10 +92,6 @@ export function BurnMeter({ run, devices }: { run: RunView | null; devices: Devi
   const active = run && (run.status === "planning" || run.status === "running" || run.status === "merging");
   const use = deviceUse(run, devices);
   const total = b.gCo2 + use.g;
-  const made = oldDevices(devices)
-    .map(embodied)
-    .filter((e): e is NonNullable<typeof e> => !!e);
-  const madeKg = Math.round(made.reduce((n, e) => n + e.kg, 0));
 
   return (
     <div className="burn-wrap" ref={box}>
@@ -126,31 +122,31 @@ export function BurnMeter({ run, devices }: { run: RunView | null; devices: Devi
           <span className="burn__label">AI cost</span>
           <b>{fmtUsd(b.costUsd)}</b>
         </span>
-        <span className={open ? "burn__more burn__more--open" : "burn__more"} aria-hidden>
-          ⌄
+        <span className="burn__info-icon" aria-hidden>
+          <svg viewBox="0 0 20 20" width="18" height="18">
+            <circle cx="10" cy="10" r="8.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="10" cy="6.2" r="1.25" fill="currentColor" />
+            <path d="M10 9.2v5.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
         </span>
       </button>
       {open && (
         <div className="burn-info" id="burn-info" role="dialog" aria-label="What Burn means">
           <dl>
+            <dt>Saved</dt>
+            <dd>
+              Your old devices run the agents, so no new {NEW_MACHINE.name}: <b>C${NEW_MACHINE.priceCad}</b> and <b>~{NEW_MACHINE.kgCo2e} kg CO₂e</b> not spent.
+            </dd>
             <dt>Footprint</dt>
             <dd>
-              AI {fmtGrams(b.gCo2)} + your devices {fmtGrams(use.g)} on Ontario's grid.
+              This request: AI {fmtGrams(b.gCo2)} + your devices {fmtGrams(use.g)}.
             </dd>
             <dt>Old devices</dt>
-            <dd>{use.devices ? `${use.devices} worked ${fmtDuration(use.ms)} instead of a new machine.` : "None worked on this request yet."}</dd>
+            <dd>{use.devices ? `${use.devices} worked for ${fmtDuration(use.ms)}.` : "None worked on this request yet."}</dd>
             <dt>AI cost</dt>
-            <dd>The Gemini calls at list prices.</dd>
-            {madeKg > 0 && (
-              <>
-                <dt>Reused</dt>
-                <dd>
-                  Your {made.length} old device{made.length === 1 ? "" : "s"} took <b>{madeKg} kg CO₂e</b> to make. Using them avoids making new ones.
-                </dd>
-              </>
-            )}
+            <dd>Gemini calls at list prices.</dd>
           </dl>
-          <p className="burn-info__note">Estimates. CO₂e: all greenhouse gases as CO₂.</p>
+          <p className="burn-info__note">Estimates. CO₂e = all greenhouse gases as CO₂.</p>
         </div>
       )}
     </div>

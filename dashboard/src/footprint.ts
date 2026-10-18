@@ -5,22 +5,17 @@
 // Device power: typical active draw while a device works a task (estimate): phone ~3 W, laptop ~15 W
 //   (U-series CPU running a browser), desktop ~60 W. The cloud worker is not an old device and its
 //   power is not known, so it is left out.
-// Embodied carbon: what it took to make the device (materials + manufacturing), from the maker:
-//   - Samsung Galaxy A54 5G: 45.285 kg CO2e life cycle, 82.3 % before use (78.4 % materials,
-//     3.9 % manufacturing) = 37.3 kg. Carbon Trust certified product environmental profile.
-//   - HP Elite Dragonfly: 162 kg CO2e manufacturing (HP product carbon data for the Elite Dragonfly G4,
-//     as listed with the product specs).
-//   Other phones and laptops use these as "similar device" estimates and say so.
+// What reuse saves: the new machine you would otherwise buy to host the agents. Base Apple Mac mini (M4):
+//   about 32 kg CO2e over its life by Apple's figure (Mac mini Product Environmental Report, Oct 2024,
+//   as reported by TechCrunch/TechRadar), launch price C$799 (EveryMac's Canadian MSRP list).
 
 import type { DeviceView, RunView } from "@co2lab/shared";
 
 export const GRID_G_PER_KWH = 53;
 const ACTIVE_W: Partial<Record<DeviceView["kind"], number>> = { android: 3, laptop: 15, desktop: 60 };
 
-/** Old devices (not the cloud worker) that are still paired. */
-export function oldDevices(devices: DeviceView[]): DeviceView[] {
-  return devices.filter((d) => d.kind !== "cloud" && d.state !== "revoked");
-}
+/** The new machine reuse replaces. */
+export const NEW_MACHINE = { name: "Mac mini", priceCad: 799, kgCo2e: 32 };
 
 export interface DeviceUse {
   devices: number;
@@ -47,24 +42,6 @@ export function deviceUse(run: RunView | null, devices: DeviceView[]): DeviceUse
     wh += ((ACTIVE_W[kind.get(id)!] ?? 0) * t) / 3_600_000;
   }
   return { devices: per.size, ms, wh, g: (wh / 1000) * GRID_G_PER_KWH };
-}
-
-export interface Embodied {
-  kg: number;
-  source: string;
-}
-
-/** Carbon it took to make this device, if we have a figure for it or a similar one. */
-export function embodied(d: DeviceView): Embodied | null {
-  if (d.kind === "android")
-    return /a54/i.test(d.name)
-      ? { kg: 37.3, source: "Samsung Galaxy A54 profile (Carbon Trust)" }
-      : { kg: 37.3, source: "estimate: similar to a Galaxy A54" };
-  if (d.kind === "laptop")
-    return /dragonfly/i.test(d.name)
-      ? { kg: 162, source: "HP Elite Dragonfly carbon data" }
-      : { kg: 162, source: "estimate: similar to an HP Elite Dragonfly" };
-  return null;
 }
 
 /** Grams with sensible precision: 0.04 g, 1.3 g, 27 g, 1.2 kg. */
