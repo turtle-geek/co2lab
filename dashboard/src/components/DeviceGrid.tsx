@@ -30,15 +30,15 @@ function Progress({ value, state }: { value: number; state: string }) {
 /** Upright battery drawn like the devices (brown outline); the fill drops with the charge, a bolt when charging. */
 function BatteryIcon({ pct, charging }: { pct: number; charging: boolean }) {
   const level = Math.max(0, Math.min(100, pct));
-  const inner = 15; // fill area height (y 6..21)
+  const inner = 12.4; // fill area height (y 4.8..17.2)
   const h = Math.max(level > 0 ? 1.5 : 0, (inner * level) / 100);
   const tone = level <= 20 && !charging ? "low" : level <= 40 && !charging ? "mid" : "ok";
   return (
-    <svg className={`meta-icon battery battery--${tone}`} viewBox="0 0 14 24" width="12" height="21" aria-hidden>
-      <rect className="battery__cap" x="4.5" y="1" width="5" height="2.5" rx="1" />
-      <rect className="battery__case" x="1.5" y="3.5" width="11" height="19" rx="2.5" />
-      <rect className="battery__fill" x="3.5" y={6 + inner - h} width="7" height={h} rx="1" />
-      {charging && <path className="battery__bolt" d="M8 6.5 L4.5 13.5 H7 L6 19.5 L9.5 11.5 H7 Z" />}
+    <svg className={`meta-icon battery battery--${tone}${charging ? " battery--charging" : ""}`} viewBox="0 0 14 20" width="12" height="17" aria-hidden>
+      <rect className="battery__cap" x="4.5" y="0.8" width="5" height="2.2" rx="1" />
+      <rect className="battery__case" x="1.5" y="2.8" width="11" height="16.4" rx="2.5" />
+      <rect className="battery__fill" x="3.5" y={4.8 + inner - h} width="7" height={h} rx="1" />
+      {charging && <path className="battery__bolt" d="M8.6 3.6 L3.4 11.4 H6.6 L5.4 17.8 L10.6 9.6 H7.4 Z" />}
     </svg>
   );
 }
@@ -46,10 +46,10 @@ function BatteryIcon({ pct, charging }: { pct: number; charging: boolean }) {
 /** Thermometer with a red bulb and column. */
 function ThermometerIcon() {
   return (
-    <svg className="meta-icon thermo" viewBox="0 0 14 24" width="12" height="21" aria-hidden>
-      <path className="thermo__glass" d="M4.5 4 a2.5 2.5 0 0 1 5 0 V14.2 a4.5 4.5 0 1 1 -5 0 Z" />
-      <rect className="thermo__fill" x="6" y="7" width="2" height="9" rx="1" />
-      <circle className="thermo__fill" cx="7" cy="18" r="2.6" />
+    <svg className="meta-icon thermo" viewBox="0 0 14 20" width="12" height="17" aria-hidden>
+      <path className="thermo__glass" d="M4.6 3.4 a2.4 2.4 0 0 1 4.8 0 V11.3 a4.2 4.2 0 1 1 -4.8 0 Z" />
+      <rect className="thermo__fill" x="6" y="5.6" width="2" height="8.5" rx="1" />
+      <circle className="thermo__fill" cx="7" cy="14.8" r="2.4" />
     </svg>
   );
 }
