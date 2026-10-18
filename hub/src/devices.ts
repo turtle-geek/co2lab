@@ -43,6 +43,8 @@ export interface LiveDevice {
 }
 
 export function isResting(d: LiveDevice): boolean {
+  // Phones are not rested on low battery (owner's choice for the demo); heat limits still apply.
+  if (d.rec.kind === "android") return false;
   const t = d.telemetry;
   return !!t && t.batteryPct !== null && t.batteryPct < BATTERY_REST_BELOW_PCT && t.charging !== true;
 }
