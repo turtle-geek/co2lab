@@ -135,9 +135,7 @@ export function BurnMeter({ run, devices }: { run: RunView | null; devices: Devi
           <dl>
             <dt>Saved</dt>
             <dd>
-              Your old devices run the agents, so no new {NEW_MACHINE.name}.
-              <br />
-              <b>${NEW_MACHINE.priceCad}</b> and <b>~{NEW_MACHINE.kgCo2e} kg CO₂e</b> not spent.
+              Your old devices run the agents instead of a new {NEW_MACHINE.name}, saving <b>${NEW_MACHINE.priceCad}</b> and <b>~{NEW_MACHINE.kgCo2e} kg CO₂e</b>.
             </dd>
             <dt>Footprint</dt>
             <dd>
