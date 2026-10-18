@@ -154,7 +154,7 @@ export type Findings = z.infer<typeof FindingsSchema>;
 
 export async function extractFindings(o: { goal: string; text: string; images: string[]; onUsage: UsageSink }): Promise<Findings> {
   return withFallback({
-    tier: "flash" as const,
+    tier: "lite" as const,
     label: "findings",
     schema: FindingsSchema,
     onUsage: o.onUsage,
@@ -192,7 +192,7 @@ export async function chooseWebAction(o: {
 }): Promise<{ action: ProxyAction; why: string }> {
   const nodes = o.nodes.map((n) => `${n.id} | ${n.viewId ?? ""} | ${n.text ?? ""} | ${n.desc ?? ""}`).join("\n");
   const r = await withFallback({
-    tier: "flash" as const,
+    tier: "lite" as const,
     label: "web agent",
     schema: WebActionSchema,
     onUsage: o.onUsage,

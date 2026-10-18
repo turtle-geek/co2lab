@@ -66,11 +66,26 @@ function cooldownMs(err: ApiError): number {
   return 60_000;
 }
 
+/** The models a tier may use, in order: its own model, then (Flash only) the backup Flash models. */
+function chain(tier: ModelTier): string[] {
+  return [config.gemini.models[tier], ...(tier === "flash" ? config.gemini.flashBackups : [])].filter(Boolean);
+}
+
+const cooling = (slot: KeySlot, model: string, now = Date.now()) => (slot.coolUntil.get(model) ?? 0) > now;
+
 function getClient(tier: ModelTier): { slot: KeySlot; model: string } {
   const problem = geminiProblem(tier);
   if (problem) throw new GeminiUnavailable(problem);
-  const model = config.gemini.models[tier];
-  return { slot: pickSlot(model), model };
+  const main = config.gemini.models[tier];
+  const slot = pickSlot(main);
+  // First model in the chain that is not out of quota; the main model if all are.
+  return { slot, model: chain(tier).find((m) => !cooling(slot, m)) ?? main };
+}
+
+/** Every model of this tier is out of quota on the current key: skip straight to Lite instead of retrying. */
+function tierExhausted(tier: ModelTier): boolean {
+  const slot = pickSlot(config.gemini.models[tier]);
+  return chain(tier).every((m) => cooling(slot, m));
 }
 
 // Keywords Gemini's responseJsonSchema supports (per @google/genai docs); others are dropped.
@@ -128,6 +143,9 @@ export async function callJson<S extends z.ZodType>(opts: {
   schema: S;
   onUsage: UsageSink;
 }): Promise<z.infer<S>> {
+  if (opts.tier !== "lite" && config.gemini.models.lite && tierExhausted(opts.tier)) {
+    return callJson({ ...opts, tier: "lite", label: `${opts.label} (lite)` });
+  }
   let { slot, model } = getClient(opts.tier);
   const responseJsonSchema = jsonSchema(opts.schema);
   let lastErr = "unknown error";
@@ -155,6 +173,18 @@ export async function callJson<S extends z.ZodType>(opts: {
         text = res.text;
         break;
       } catch (err) {
+        // Out of quota on this model: cool it down and move to the next model of the tier (older Flash
+        // models have their own quota) without using up a backoff retry.
+        if (err instanceof ApiError && err.status === 429) {
+          slot.coolUntil.set(model, Date.now() + cooldownMs(err));
+          const next = chain(opts.tier).find((m) => m !== model && !cooling(slot, m));
+          if (next) {
+            log.warn(`gemini ${opts.label}: ${model} out of quota; trying ${next}`);
+            model = next;
+            i--;
+            continue;
+          }
+        }
         // Out of quota (429) or this key's project blocked / invalid (403, 401, 400 "API key"):
         // retire it for this model (blocked keys for a day) and move to the next key without waiting.
         const blocked = err instanceof ApiError && (err.status === 403 || err.status === 401 || (err.status === 400 && /api key/i.test(err.message)));

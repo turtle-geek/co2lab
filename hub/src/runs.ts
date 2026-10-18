@@ -53,7 +53,9 @@ export const RUN_TIMEOUT_MS = 5 * 60_000;
 /** Max times a subtask is handed out (first try + reassignments). */
 export const MAX_ATTEMPTS = 3;
 
-export const DEFAULT_CONFIG: AgentConfig = { model: "flash", screenshotScale: 0.5, mode: "recipe" };
+// Lite for device work (steering, reading screens): Lab found it reads deal screens as accurately as Flash
+// at about a quarter of the cost (Lite vs Flash in recipe mode, Oct 18). Planning and answers stay on Flash.
+export const DEFAULT_CONFIG: AgentConfig = { model: "lite", screenshotScale: 0.5, mode: "recipe" };
 
 export const PLAN_INFO: Record<PlanId, { capability: Capability; source: DealSource; label: string; goal: string }> = {
   "app:tims": {

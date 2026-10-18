@@ -32,6 +32,8 @@ export const config = {
       flash: str("GEMINI_MODEL_FLASH"),
       pro: str("GEMINI_MODEL_PRO"),
     },
+    /** Older Flash models tried in order when the Flash model is out of quota; each has its own free-tier quota. */
+    flashBackups: str("GEMINI_MODEL_FLASH_BACKUPS").split(",").map((m) => m.trim()).filter(Boolean),
   },
   dashboardDist: resolve(ROOT_DIR, "dashboard", "dist"),
   /** install.ps1 / install.sh templates and the prebuilt worker bundle (`npm run bundle -w worker-web`). */
