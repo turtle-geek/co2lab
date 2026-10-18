@@ -94,6 +94,7 @@ export class MockHub {
   private runs: RunSim[] = [];
   private approvals: { id: string; message: string; target: string; runId: string | null; createdAt: number }[] = [];
   private seq = 1;
+  private readonly boot = Date.now().toString(36);
   /** While > now, new sockets fail to connect (simulates hub/network loss). */
   downUntil = 0;
   pairCode: string | null = null;
@@ -219,7 +220,8 @@ export class MockHub {
   }
 
   private id(prefix: string) {
-    return `${prefix}-${(this.seq++).toString().padStart(3, "0")}`;
+    // Unique across reloads (like the hub's ULIDs), so a run id saved in the browser never matches a new run.
+    return `${prefix}-${this.boot}-${(this.seq++).toString().padStart(3, "0")}`;
   }
 
   notify() {
