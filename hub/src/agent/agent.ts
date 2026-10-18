@@ -97,10 +97,13 @@ export async function planRequest(o: {
       "uniquely have (signed-in apps, installed games) and say so in reasoning. Keep it small: 1-4 tasks usually. " +
       "Never plan payments, orders, sign-ins, messages or posts. Set fields a tool does not use to null / []. " +
       (followUp
-        ? "This is the follow-up round: you see what the first tasks found. Add tasks only if they clearly improve the answer. " +
-          "When the request depends on qualities players report (grind, story, performance, bugs, value) and the findings list " +
-          "candidate games with Steam app IDs (in store.steampowered.com/app/<id>/ links), add ONE reviews task for the 3-5 best " +
-          "candidates instead of browsing again. Otherwise return no tasks."
+        ? "This is a follow-up round: you see what the earlier tasks found. Decide what is still missing to fully answer the " +
+          "request and add the tasks for it; return no tasks only when the findings already answer every part of the request. " +
+          "If the request asks for recommendations or to find something and the findings have no candidates yet, add web tasks " +
+          "to find candidates, using what was learned (e.g. the genres of games the owner plays, excluding games they own). " +
+          "If the request asks about reviews, sentiment, fake/troll reviews, or qualities players report (grind, story, " +
+          "performance, value) and the findings list candidate games with Steam app IDs (store.steampowered.com/app/<id>/ links), " +
+          "add ONE reviews task for the 3-5 best candidates. Do not repeat a task that already ran."
         : "If no listed device can do anything useful for the request, return no tasks and explain in cannotDo."),
     parts: [
       {

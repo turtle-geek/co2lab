@@ -108,6 +108,8 @@ interface GeneralTask {
 
 const WEB_AGENT_MAX_STEPS = 15;
 const REVIEWS_PER_GAME = 1000;
+/** Planning rounds per request: the first plan plus up to two follow-ups (e.g. library -> candidates -> reviews). */
+const MAX_WAVES = 3;
 
 export class RunManager {
   private runs = new Map<string, RunRecord>();
@@ -119,7 +121,8 @@ export class RunManager {
   private runCreating = new Map<string, Promise<RunView>>();
   private general = new Map<string, GeneralTask>();
   /** Runs planned by the general agent (not deal-only); wave 2 = follow-up already planned. */
-  private agentRuns = new Map<string, { wave: 1 | 2 }>();
+  /** Runs planned by the general agent (not deal-only); wave counts the planning rounds so far (max MAX_WAVES). */
+  private agentRuns = new Map<string, { wave: number }>();
 
   constructor(private deps: RunDeps) {}
 
@@ -835,8 +838,8 @@ export class RunManager {
   private async finishAgent(run: RunRecord) {
     const state = this.agentRuns.get(run.id)!;
     const sections = await this.sections(run);
-    if (state.wave === 1 && this.deps.catalog) {
-      state.wave = 2;
+    if (state.wave < MAX_WAVES && this.deps.catalog) {
+      state.wave += 1;
       try {
         const plan = await planRequest({
           prompt: run.prompt,
