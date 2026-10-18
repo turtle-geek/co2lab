@@ -99,7 +99,7 @@ export interface RunDeps {
 
 /** A general-agent task that is not a deal recipe. */
 interface GeneralTask {
-  tool: "web" | "reviews";
+  tool: "web" | "reviews" | "app";
   startUrl: string | null;
   setIds: string[];
   findings: Findings | null;
@@ -324,6 +324,10 @@ export class RunManager {
       } else if (t.tool === "web") {
         if (this.deps.devices.anyWith("web")) general.push(t);
         else dropped.push(`browse the web (${t.goal.slice(0, 60)})`);
+      } else if (t.tool === "app") {
+        const pkg = t.package?.trim() ?? "";
+        if (pkg && /^[A-Za-z0-9._-]+$/.test(pkg) && this.deps.devices.anyWith(`app:${pkg}`)) general.push({ ...t, package: pkg });
+        else dropped.push(`open ${pkg || "an app"} (no phone has it installed)`);
       } else if (t.steamAppIds.length && computeDevice && this.deps.compute) general.push(t);
       else dropped.push("analyze reviews (no app IDs or no computer online)");
     }
@@ -333,32 +337,46 @@ export class RunManager {
   private addGeneral(run: RunRecord, tasks: PlannedTask[]) {
     const now = Date.now();
     for (const t of tasks) {
-      const isWeb = t.tool === "web";
+      const isApp = t.tool === "app";
+      const scheduled = t.tool === "web" || isApp;
+      const appLabel = isApp ? this.appLabel(t.package!) : null;
       const s: SubtaskRecord = {
         id: ulid(),
         runId: run.id,
-        capability: "web",
+        capability: isApp ? `app:${t.package}` : "web",
         source: "agent",
-        label: isWeb ? `Web: ${hostLabel(t.startUrl) ?? t.goal.slice(0, 40)}` : `Review analysis (${t.steamAppIds.length} game${t.steamAppIds.length === 1 ? "" : "s"})`,
-        goal: t.goal,
+        label:
+          t.tool === "web"
+            ? `Web: ${hostLabel(t.startUrl) ?? t.goal.slice(0, 40)}`
+            : isApp
+              ? `App: ${appLabel}`
+              : `Review analysis (${t.steamAppIds.length} game${t.steamAppIds.length === 1 ? "" : "s"})`,
+        goal: isApp ? `In the ${appLabel} app: ${t.goal}` : t.goal,
         // Review analysis runs as compute batches, never through the subtask scheduler.
-        status: isWeb ? "queued" : "running",
+        status: scheduled ? "queued" : "running",
         deviceId: null,
         attempt: 1,
         error: null,
         dealCount: 0,
         createdAt: now,
-        startedAt: isWeb ? null : now,
+        startedAt: scheduled ? null : now,
         finishedAt: null,
       };
-      const g: GeneralTask = { tool: isWeb ? "web" : "reviews", startUrl: validUrl(t.startUrl), setIds: [], findings: null, summary: null };
+      const g: GeneralTask = { tool: t.tool === "deals" ? "web" : t.tool, startUrl: validUrl(t.startUrl), setIds: [], findings: null, summary: null };
       this.subtasks.set(s.id, s);
       this.byRun.get(run.id)!.push(s.id);
       this.general.set(s.id, g);
-      if (isWeb) this.queuedAt.set(s.id, now);
+      if (scheduled) this.queuedAt.set(s.id, now);
       else for (const appId of t.steamAppIds) g.setIds.push(this.deps.compute!().queue(appId, "fast", REVIEWS_PER_GAME));
       this.saveSubtask(s);
     }
+  }
+
+  /** The installed app's name as the phone reported it (falls back to the package). */
+  private appLabel(pkg: string): string {
+    for (const d of this.deps.devices.active())
+      for (const c of d.context) if (c.kind === "installed_app" && c.id === pkg) return c.label;
+    return pkg;
   }
 
   /** From ComputeManager: a review job set ended; finish the review task once all its games are done. */
@@ -485,7 +503,7 @@ export class RunManager {
       .filter((s) => s.status === "queued")
       .sort((a, b) => (this.queuedAt.get(a.id) ?? 0) - (this.queuedAt.get(b.id) ?? 0));
     for (const s of queued) {
-      const capable = this.deps.devices.active().filter((d) => d.rec.capabilities.includes(s.capability));
+      const capable = this.deps.devices.active().filter((d) => this.deps.devices.canRun(d, s.capability));
       const free = capable.filter((d) => this.deps.devices.isAvailable(d, now));
       const home = free.filter((d) => d.rec.kind !== "cloud");
       let pick = home[0];
@@ -799,7 +817,7 @@ export class RunManager {
         out.push({ source: s.label, deviceId: s.deviceId, text: `(failed: ${s.error ?? s.status})` });
       } else if (g?.findings) {
         const items = g.findings.items.map((i) => `- ${i.title}: ${i.detail}${i.url ? ` (${i.url})` : ""}${i.steamAppId ? ` [Steam app ${i.steamAppId}]` : ""}`);
-        out.push({ source: g.tool === "web" ? s.label.replace(/^Web: /, "") : "review analysis", deviceId: s.deviceId, text: `${g.findings.summary}\n${items.join("\n")}` });
+        out.push({ source: g.tool === "reviews" ? "review analysis" : s.label.replace(/^(Web|App): /, ""), deviceId: s.deviceId, text: `${g.findings.summary}\n${items.join("\n")}` });
       } else if (!g) {
         const mine = deals.filter((d) => d.subtaskId === s.id);
         out.push({

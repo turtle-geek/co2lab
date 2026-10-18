@@ -259,6 +259,16 @@ class AgentService : Service(), SubtaskRunner.Link {
                 while (true) socket?.send(outbox.poll() ?: break)
                 main.removeCallbacks(heartbeat)
                 main.post(heartbeat)
+                // Tell the planner which apps this phone has (off the socket thread: the package query can take a moment).
+                Thread {
+                    try {
+                        val apps = AppCatalog(this).launchables().filter { it.packageName != packageName }.map { it.packageName to it.label }
+                        socket?.send(Msg.context(apps).toString())
+                        Log.i("Co2labService", "shared ${apps.size} installed apps with the hub")
+                    } catch (e: Exception) {
+                        Log.w("Co2labService", "could not list installed apps: ${e.message}")
+                    }
+                }.start()
             }
             "subtask.assign" -> {
                 val a = try { Assign.parse(msg) } catch (e: Exception) { return }

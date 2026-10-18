@@ -331,7 +331,7 @@ export async function chooseProxyAction(opts: {
       "use tapXY only if no node fits; tapXY x,y are SCREEN pixels in the same frame as the node bounds " +
       "(the screenshot is scaled down, so do not use image pixel positions). Dismiss popups and onboarding with their close/skip/not-now buttons. " +
       "Never type or submit credentials, never place orders or redeem offers. If the app shows a sign-in screen, " +
-      "return kind=fail with reason 'app needs sign-in'. Return kind=done when the deals/offers list is on screen. " +
+      "return kind=fail with reason 'app needs sign-in'. Return kind=done when the screen shows what the goal asks for (for deal goals: the deals/offers list); the hub then screenshots and scrolls it. Never buy, send messages, change settings or accept anything. " +
       "Fill only the fields the chosen kind needs; set the rest to null.",
     parts: [
       {

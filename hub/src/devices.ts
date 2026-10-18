@@ -123,9 +123,17 @@ export class DeviceRegistry {
     return this.all().filter((d) => !d.rec.revokedAt);
   }
 
+  /** Has this capability: listed at pairing, or (general agent) `app:<package>` for an app the phone reported as installed. */
+  canRun(d: LiveDevice, cap: Capability): boolean {
+    if (d.rec.capabilities.includes(cap)) return true;
+    if (!cap.startsWith("app:") || d.rec.kind !== "android") return false;
+    const pkg = cap.slice(4);
+    return d.context.some((c) => c.kind === "installed_app" && c.id === pkg);
+  }
+
   /** Any non-revoked device (online or not) that has the capability. */
   anyWith(cap: Capability): boolean {
-    return this.active().some((d) => d.rec.capabilities.includes(cap));
+    return this.active().some((d) => this.canRun(d, cap));
   }
 
   /** Can take new work right now. */

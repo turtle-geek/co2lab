@@ -17,10 +17,12 @@ export interface CatalogDevice {
   context: ContextItem[];
 }
 
-export type Tool = "deals" | "web" | "reviews";
+export type Tool = "deals" | "web" | "reviews" | "app";
 
 export interface PlannedTask {
   tool: Tool;
+  /** app: Android package to open. */
+  package?: string | null;
   /** deals: which recipe source. */
   source: PlanId | null;
   goal: string;
@@ -35,7 +37,9 @@ export interface Plan {
 }
 
 const TaskSchema = z.object({
-  tool: z.enum(["deals", "web", "reviews"]),
+  tool: z.enum(["deals", "web", "reviews", "app"]),
+  /** app: the Android package to open (from the catalog). */
+  package: z.string().nullable(),
   source: z.enum(PLAN_IDS).nullable(),
   goal: z.string().min(3).max(400),
   startUrl: z.string().nullable(),
@@ -57,7 +61,7 @@ function catalogText(devices: CatalogDevice[]): string {
       return [
         `- ${d.name} (${d.kind}, ${d.state}); capabilities: ${d.capabilities.join(", ")}`,
         browser ? `  browser: ${browser.label}` : "",
-        apps.length ? `  installed apps: ${apps.slice(0, 150).map((a) => a.label).join(", ")}` : "",
+        apps.length ? `  installed apps: ${apps.slice(0, 200).map((a) => `${a.label} [${a.id}]`).join(", ")}` : "",
         games.length ? `  installed Steam games (${games.length}): ${games.slice(0, 200).map((g) => `${g.label} [${g.id}]`).join(", ")}` : "",
       ]
         .filter(Boolean)
@@ -71,6 +75,7 @@ const TOOLS_TEXT =
   "- deals: collect current offers from one built-in source (source = app:tims, app:mcdonalds, app:popeyes need an Android device with that capability; web:redflagdeals needs a web device). Always use this tool (never web) for those four sources. For restaurant / food deal requests, use EVERY deal source that has an online device (phone apps and web:redflagdeals) unless the request names specific restaurants.\n" +
   "- web: a browser agent on a laptop or the Cloud worker visits sites and reads them to reach the goal. Give a concrete goal and, when you know it, a startUrl (e.g. a Steam store search URL https://store.steampowered.com/search/?term=...&maxprice=20 or a site's search page). One task per site or sub-question; tasks run in parallel on different devices.\n" +
   "  For games, search the Steam store by tag rather than by words in the title, e.g. https://store.steampowered.com/search/?tags=1685&maxprice=20 (1685 = Co-op, 1662 = Survival, 1742 = Story Rich, 3843 = Online Co-Op) and sort by reviews (&filter=topsellers or &sort_by=Reviews_DESC).\n" +
+  "- app: on an Android phone, open one of its installed apps (package = the id in [brackets] in the phone's installed apps) and reach the goal with the phone's screen agent; the hub then reads the screens. Use this for context only the owner's signed-in apps have (e.g. the owner's game library in the Steam app, orders, rewards, saved items). Goals must only read: never buy, send, post, sign in or change settings. Not for the four deal sources (use deals).\n" +
   "- reviews: analyze Steam user reviews on the devices (topics like grind, story, performance, multiplayer, value, content; positive vs negative, by playtime). Needs Steam app IDs (numbers). Use only when you already know the IDs.\n";
 
 export async function planRequest(o: {

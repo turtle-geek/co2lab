@@ -34,6 +34,8 @@ class SubtaskRunner(private val context: Context, private val link: Link) {
     companion object {
         private const val TAG = "Co2labRunner"
         const val MAX_PROXY_ACTIONS = 8
+        /** Apps without a recipe: the agent drives the whole way. */
+        const val MAX_AGENT_ACTIONS = 14
         private const val PROXY_TIMEOUT_MS = 45_000L
         private const val LAUNCH_TIMEOUT_MS = 15_000L
         private const val FRAME_MAX_WIDTH = 720
@@ -128,8 +130,11 @@ class SubtaskRunner(private val context: Context, private val link: Link) {
     private fun run(a: Assign): Pair<List<String>, String?> {
         val catalog = AppCatalog(context)
         val appId = a.appId ?: throw Failure("${link.deviceName()} cannot run ${a.capability}")
-        val app = catalog.apps[appId] ?: throw Failure("${link.deviceName()} has no recipe for ${a.capability}")
-        val pkg = catalog.resolve(appId) ?: throw Failure("${app.label} is not installed on ${link.deviceName()}")
+        // A recipe app (tims, mcdonalds, ...) or, for the general agent, any installed package by name.
+        val generic = !catalog.apps.containsKey(appId)
+        val app = catalog.apps[appId] ?: genericApp(catalog, appId)
+            ?: throw Failure("${appId} is not installed on ${link.deviceName()}")
+        val pkg = if (generic) appId else catalog.resolve(appId) ?: throw Failure("${app.label} is not installed on ${link.deviceName()}")
         val svc = a11y()
 
         step(a, "recipe", "Opening ${app.label}", 0.05)
@@ -139,7 +144,10 @@ class SubtaskRunner(private val context: Context, private val link: Link) {
         waitForPackage(a, pkg, app.label)
         sleep(a, 2_500) // let the start screen settle (splash, banners)
 
-        if (a.config.mode == "vision") {
+        if (generic) {
+            step(a, "fallback", "No recipe for ${app.label}: the hub's agent picks each action", 0.15)
+            proxy(a, a.goal, pkg, app, MAX_AGENT_ACTIONS)
+        } else if (a.config.mode == "vision") {
             step(a, "fallback", "Vision mode: asking the hub for each action", 0.15)
             proxy(a, a.goal.ifBlank { "Open the screen that lists all current deals or offers in ${app.label}" }, pkg, app)
         } else {
@@ -263,10 +271,27 @@ class SubtaskRunner(private val context: Context, private val link: Link) {
 
     // ---------- Agent proxy fallback ----------
 
-    /** Ask the hub for up to [MAX_PROXY_ACTIONS] actions toward [goal]. Returns when the hub says done. */
-    private fun proxy(a: Assign, goal: String, pkg: String, app: AppCatalog.App) {
+    /** An installed app without a recipe: the agent loop drives it; no sign-in texts or blockers known. */
+    private fun genericApp(catalog: AppCatalog, pkg: String): AppCatalog.App? {
+        val l = catalog.launchables().firstOrNull { it.packageName == pkg } ?: return null
+        return AppCatalog.App(
+            id = pkg,
+            label = l.label,
+            packages = listOf(pkg),
+            labelMatch = emptyList(),
+            report = false,
+            signIn = emptyList(),
+            dismiss = listOf("Not now", "Skip", "No thanks", "Maybe later", "Close", "Dismiss", "Got it"),
+            steps = emptyList(),
+            screens = 6,
+            blockers = emptyList(),
+        )
+    }
+
+    /** Ask the hub for up to [maxActions] actions toward [goal]. Returns when the hub says done. */
+    private fun proxy(a: Assign, goal: String, pkg: String, app: AppCatalog.App, maxActions: Int = MAX_PROXY_ACTIONS) {
         val history = mutableListOf<String>()
-        for (n in 1..MAX_PROXY_ACTIONS) {
+        for (n in 1..maxActions) {
             check(a)
             val svc = a11y()
             val nodes = svc.nodes()
@@ -286,7 +311,7 @@ class SubtaskRunner(private val context: Context, private val link: Link) {
             reply ?: throw Failure("hub agent did not answer within ${PROXY_TIMEOUT_MS / 1000} s")
             val action = ProxyAction.parse(reply)
             history += action.describe()
-            step(a, "fallback", "Hub action $n/$MAX_PROXY_ACTIONS: ${action.describe()}", 0.2 + 0.3 * n / MAX_PROXY_ACTIONS)
+            step(a, "fallback", "Hub action $n/$maxActions: ${action.describe()}", 0.2 + 0.3 * n / maxActions)
             when (action) {
                 is ProxyAction.Done -> return
                 is ProxyAction.Fail -> throw Failure("${app.label}: ${action.reason}")
@@ -308,7 +333,7 @@ class SubtaskRunner(private val context: Context, private val link: Link) {
                 sleep(a, 2_500)
             }
         }
-        throw Failure("could not reach the deals screen in ${app.label} after $MAX_PROXY_ACTIONS hub actions")
+        throw Failure("could not reach the goal in ${app.label} after $maxActions hub actions")
     }
 
     // ---------- Live frames ----------

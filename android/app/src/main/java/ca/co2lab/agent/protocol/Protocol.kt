@@ -36,6 +36,12 @@ object Msg {
 
     fun failed(subtaskId: String, reason: String) = obj("subtask.failed").put("subtaskId", subtaskId).put("reason", reason)
 
+    /** What this phone tells the planner (SPEC §4.8): every app with a launcher icon (package + label). */
+    fun context(apps: List<Pair<String, String>>) = obj("device.context").put(
+        "items",
+        JSONArray(apps.take(1500).map { (pkg, label) -> JSONObject().put("kind", "installed_app").put("id", pkg).put("label", label.take(200)) }),
+    )
+
     fun proxyRequest(requestId: String, subtaskId: String, goal: String, screenshot: String, nodes: JSONArray, history: List<String>) =
         obj("proxy.request").put("requestId", requestId).put("subtaskId", subtaskId).put("goal", goal)
             .put("screenshot", screenshot).put("nodes", nodes).put("history", JSONArray(history))
