@@ -19,7 +19,7 @@ You pair an old Android phone and a laptop, then type a request, such as "best l
 - **Handoff:** close the laptop lid mid-run and a cloud worker picks up its task within seconds.
 - **One answer:** Gemini ranks the deals and shows where each one came from.
 - **Burn meter:** each request shows its CO₂e, which old devices worked and for how long, and its AI cost.
-- **Lab:** shows where the AI footprint comes from and runs research experiments to cut it.
+- **Lab:** shows where the AI footprint comes from, by step, device and request. It also runs research experiments to cut it, from your own ideas or the agent's.
 
 **In one sentence:** CO₂LAB is a personal agent fleet on your old devices that reads your apps and measures each request's CO₂e.
 
@@ -49,18 +49,18 @@ The interesting decision was the split: Gemini decides what to do, plain code de
 
 - **Lid-close handoff works live:** the cloud worker took over the laptop's task in the same second.
 - **A real research loop:** the agent cited FastV and FrugalGPT from our Papiers library and ran 21 trials on real deal screens. Our redirect steered the second experiment.
-- **A measured result:** Gemini Flash-Lite found all 17 deals on our 3 test screens at $0.00046 per capture, against $0.00194 for Flash. It also took 2.8 s instead of 11.9 s.
+- **A measured result we shipped:** Gemini Flash-Lite found all 17 deals on our 3 test screens at $0.00046 per capture, against $0.00194 for Flash. We switched the device agents to Lite because of it.
 - **Compute on old hardware:** the laptop and cloud worker analyzed 5,435 Steam review sentences in 34 seconds.
 
 ## What we learned
 
 - Almost all of a request's footprint is the AI. By our estimate, our devices on Ontario's grid add under 0.01 g per request.
 - Token counts for images do not shrink much with resolution, so the model tier is the lever.
-- One API key needs a fallback. When Flash returned 503 or 429, retrying on Flash-Lite kept runs alive.
+- Free-tier limits are per model, not per key. When Flash ran out, older Flash models and then Lite kept runs alive on the same key.
 
-## What's next for CO₂LAB
+## What's next for CO₂lab
 
-- **Make Lite the default** for reading deal screens after testing more apps.
+- **Test Lite on more apps** before trusting it beyond deal screens.
 - **Measure real device power** from the phone's battery current and the laptop's discharge rate.
 - **Run Lab on every job** the agents do, not only deal reading.
 - **Bring it to companies:** the same hub could schedule agent work on a company's retired laptops and phones.
