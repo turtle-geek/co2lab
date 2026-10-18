@@ -25,8 +25,8 @@ export const config = {
   sessionSecret: str("SESSION_SECRET"),
   gemini: {
     apiKey: str("GEMINI_API_KEY"),
-    /** GEMINI_API_KEY plus any in GEMINI_API_KEYS (comma-separated); gemini.ts fails over between them on quota errors. */
-    apiKeys: [...new Set([str("GEMINI_API_KEY"), ...str("GEMINI_API_KEYS").split(",").map((k) => k.trim())].filter(Boolean))],
+    /** One key only: the Gemini prize tracks usage by API key, so there is no key pool. */
+    apiKeys: [str("GEMINI_API_KEY")].filter(Boolean),
     models: {
       lite: str("GEMINI_MODEL_LITE"),
       flash: str("GEMINI_MODEL_FLASH"),
@@ -48,6 +48,7 @@ export function checkConfig(): string[] {
     problems.push("OWNER_PASSPHRASE is not set (or still 'change-me'); owner login is disabled until it is.");
   if (config.sessionSecret.length < 32) problems.push("SESSION_SECRET must be 32+ characters; owner login is disabled until it is.");
   if (!config.gemini.apiKeys.length) problems.push("GEMINI_API_KEY is not set; runs will fail with that reason.");
+  if (str("GEMINI_API_KEYS")) problems.push("GEMINI_API_KEYS is set but ignored; the hub uses GEMINI_API_KEY only.");
   return problems;
 }
 

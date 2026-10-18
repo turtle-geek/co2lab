@@ -23,8 +23,8 @@ export interface Usage {
 export type UsageSink = (u: Usage) => void;
 
 // ---------- Key pool ----------
-// With several keys (GEMINI_API_KEYS), a 429 puts the current key on a cooldown per model and the
-// call moves on to the next key at once. Keys are named by position only in logs, never by value.
+// The hub runs on one key (GEMINI_API_KEY). A 429 puts it on a cooldown per model, and the call falls
+// back to the Lite model. Keys are named by position only in logs, never by value.
 
 interface KeySlot {
   n: number;
