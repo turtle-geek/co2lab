@@ -1,16 +1,14 @@
 # CO₂LAB
 
-Run your personal AI agents on the old phone and laptop in your drawer, not on new hardware.
+Run your personal AI agents on the old devices in your drawer, not on new hardware.
 
-A solo project built at Hack the Valley 2026. [Live site](https://co2lab.work) · [Demo video]({TODO: link}) · [Devpost]({TODO: link})
-
-{TODO: add a screenshot, for example ![CO₂LAB dashboard](docs/screenshot.png)}
+A solo project built at Hack the Valley 2026. [Live site](https://co2lab.work)
 
 ## Overview
 
 An always-on agent needs a machine that stays on. Buying one costs money and adds manufacturing emissions. Running it on your daily phone wears out its battery.
 
-CO₂LAB uses the devices you already retired instead. A hub plans each request with Gemini and sends the work to an old Android phone, an old laptop, or a cloud worker. The dashboard shows each request's CO₂e, and the Lab tests cheaper ways to run the agents.
+CO₂LAB uses the devices you already retired instead: any Android 11+ phone and any Windows, macOS or Linux computer. A hub plans each request with Gemini and sends the work to whichever old device can do it, with a cloud worker as backup. The dashboard shows each request's CO₂e, and the Lab tests cheaper ways to run the agents.
 
 ## How a request runs
 
