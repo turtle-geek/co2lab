@@ -52,3 +52,8 @@ export function fmtGrams(g: number): string {
   if (g > 0) return `${g < 0.01 ? "<0.01" : g.toFixed(2)} g`;
   return "0 g";
 }
+
+export function fmtDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
+}

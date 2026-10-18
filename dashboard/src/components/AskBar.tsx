@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Burn, DeviceView, RunView } from "@co2lab/shared";
 import { fmtUsd } from "../format";
-import { NEW_MACHINE, deviceUse, fmtGrams } from "../footprint";
+import { NEW_MACHINE, deviceUse, fmtDuration, fmtGrams } from "../footprint";
 
 const EXAMPLE = "Best lunch deals near UTSC today";
 
@@ -60,11 +60,6 @@ const STATUS_TEXT: Record<RunView["status"], string> = {
   failed: "Failed",
   cancelled: "Cancelled",
 };
-
-function fmtDuration(ms: number): string {
-  const s = Math.round(ms / 1000);
-  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
-}
 
 /**
  * This request's footprint: the AI calls (Google's published per-prompt figures) plus the electricity

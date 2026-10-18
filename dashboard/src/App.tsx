@@ -6,14 +6,14 @@ import { DeviceGrid } from "./components/DeviceGrid";
 import { AskBar, BurnMeter } from "./components/AskBar";
 import { LiveScreens, screenDevices } from "./components/LiveScreens";
 import { RunBanner } from "./components/TeamStrip";
-import { DeviceHealth } from "./components/DeviceHealth";
+import { ImpactTab } from "./lab/ImpactTab";
 import { Approvals, Results } from "./components/Results";
 import { PairDialog, ShareDialog } from "./components/Dialogs";
 import { Expired, Login } from "./components/Login";
 import { Lab } from "./labSlot";
 import { ComputeTab } from "./compute/ComputeTab";
 
-type Tab = "agent" | "devices" | "compute" | "lab";
+type Tab = "agent" | "devices" | "impact" | "compute" | "lab";
 
 export function App({ backend, viewerToken }: { backend: Backend; viewerToken: string | null }) {
   const role = viewerToken ? "viewer" : "owner";
@@ -24,10 +24,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
   const [approveCode] = useState(() => (location.pathname === "/approve" ? new URLSearchParams(location.search).get("code") ?? "" : null));
   const [pairOpen, setPairOpen] = useState(approveCode !== null);
   const [shareOpen, setShareOpen] = useState(false);
-  /** Device whose battery/temperature graphs are open on the Devices tab. */
-  const [healthId, setHealthId] = useState<string | null>(null);
   const DevPanel = backend.DevPanel;
-  const healthDevice = healthId ? state.devices.find((d) => d.id === healthId && d.state !== "revoked") : undefined;
 
   const readOnly = role === "viewer" || state.role === "viewer";
   const connected = status === "open";
@@ -117,7 +114,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
           <button className={tab === "agent" ? "tab tab--on" : "tab"} onClick={() => setTab("agent")}>
             Agent
           </button>
-          <button className={tab === "lab" || tab === "compute" ? "tab tab--on" : "tab"} onClick={() => setTab("lab")}>
+          <button className={tab === "lab" || tab === "compute" || tab === "impact" ? "tab tab--on" : "tab"} onClick={() => setTab("impact")}>
             Lab
           </button>
         </nav>
@@ -139,10 +136,13 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
         )}
       </header>
 
-      {tab === "lab" || tab === "compute" ? (
+      {tab === "lab" || tab === "compute" || tab === "impact" ? (
         <main className="main">
-          {/* Lab = research on how the team works: the Papiers research loop and the compute experiments. */}
+          {/* Lab = what the requests cost and saved (Impact), the Papiers research loop and the compute experiments. */}
           <div className="seg lab-switch" role="tablist" aria-label="Lab sections">
+            <button role="tab" aria-selected={tab === "impact"} className={tab === "impact" ? "seg__on" : ""} onClick={() => setTab("impact")}>
+              Impact
+            </button>
             <button role="tab" aria-selected={tab === "lab"} className={tab === "lab" ? "seg__on" : ""} onClick={() => setTab("lab")}>
               Research
             </button>
@@ -150,7 +150,9 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
               Compute experiments
             </button>
           </div>
-          {tab === "compute" ? (
+          {tab === "impact" ? (
+            <ImpactTab runs={state.runs} devices={state.devices} />
+          ) : tab === "compute" ? (
             <ComputeTab sets={state.computeSets} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
           ) : (
             <Lab experiments={state.experiments} defaultConfig={state.defaultConfig} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
@@ -207,9 +209,6 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
                 onAdd={openPair}
                 onRevoke={(id) => hub.send({ type: "device.revoke", deviceId: id })}
                 onRename={(id, name) => hub.send({ type: "device.rename", deviceId: id, name })}
-                selectedId={healthId}
-                onSelect={(id) => setHealthId((cur) => (cur === id ? null : id))}
-                detail={healthDevice && <DeviceHealth device={healthDevice} load={backend.telemetryHistory} onClose={() => setHealthId(null)} />}
               />
             </>
           )}

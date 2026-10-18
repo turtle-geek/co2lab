@@ -224,9 +224,6 @@ export function DeviceGrid({
   onRevoke,
   onRename,
   onAdd,
-  selectedId,
-  onSelect,
-  detail,
   frames,
 }: {
   devices: DeviceView[];
@@ -237,35 +234,20 @@ export function DeviceGrid({
   onRevoke(id: string): void;
   onRename(id: string, name: string): void;
   onAdd(): void;
-  /** The device whose graphs are open (tap a card to open them). */
-  selectedId?: string | null;
-  onSelect?(id: string): void;
-  /** Shown full-width right under the row of the selected card (the graphs). */
-  detail?: ReactNode;
 }) {
-  const { ordered, dragId, cardRef, dragProps, wasDrag } = useCardOrder(devices, !readOnly);
+  const { ordered, dragId, cardRef, dragProps } = useCardOrder(devices, !readOnly);
   return (
     <section className="device-grid" aria-label="Devices">
-      {ordered.map((d) => [
+      {ordered.map((d) => (
         <div
           key={d.id}
           ref={(el) => cardRef(d.id, el)}
-          className={`card-slot${dragId === d.id ? " card-slot--dragging" : ""}${selectedId === d.id ? " card-slot--selected" : ""}`}
+          className={dragId === d.id ? "card-slot card-slot--dragging" : "card-slot"}
           {...dragProps(d.id)}
-          onClick={(e) => {
-            // a tap opens the graphs; a drag, or a click on a button or the rename field, does not
-            if (wasDrag() || (e.target as HTMLElement).closest("button, a, input, form")) return;
-            onSelect?.(d.id);
-          }}
         >
           <TreeCard device={d} readOnly={readOnly} onRevoke={onRevoke} onRename={onRename} frame={frames?.[d.id]} />
-        </div>,
-        selectedId === d.id && detail ? (
-          <div key="detail" className="device-grid__detail">
-            {detail}
-          </div>
-        ) : null,
-      ])}
+        </div>
+      ))}
       {!readOnly && <AddDeviceCard onClick={onAdd} disabled={!connected} />}
       {readOnly && devices.length === 0 && <p className="empty">No devices paired yet.</p>}
     </section>
@@ -313,7 +295,6 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
   const [order, setOrder] = useState<string[]>(loadOrder);
   const [dragId, setDragId] = useState<string | null>(null);
   const overRef = useRef<string | null>(null);
-  const dragged = useRef(false);
   const els = useRef(new Map<string, HTMLElement>());
   const before = useRef(new Map<string, DOMRect>());
   const drag = useRef<{ id: string; pointerId: number; startX: number; startY: number; grabX: number; grabY: number; active: boolean; lastX: number; lastY: number } | null>(null);
@@ -433,8 +414,7 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
     const d = drag.current;
     drag.current = null;
     const target = overRef.current;
-    overRef.current = null;
-    dragged.current = !!d?.active; // the covered card stays where it slid to; the swap below makes that its slot
+    overRef.current = null; // the covered card stays where it slid to; the swap below makes that its slot
     setDragId(null);
     if (!d?.active) return;
     if (target) return swap(d.id, target);
@@ -449,12 +429,6 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
   return {
     ordered,
     dragId,
-    /** True right after a drag ended, so the click that follows it is ignored. */
-    wasDrag: () => {
-      const v = dragged.current;
-      dragged.current = false;
-      return v;
-    },
     cardRef: (id: string, el: HTMLElement | null) => {
       if (el) els.current.set(id, el);
       else els.current.delete(id);
