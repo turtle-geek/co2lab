@@ -136,7 +136,3 @@ shared/      zod message contract used by every part
 db/          Tiger Data schema
 deploy/      Vultr setup, Caddy and systemd files
 ```
-
-## Author
-
-Built solo by [turtle-geek](https://github.com/turtle-geek): the hub, the dashboard, the Android app, the web worker and the Lab.
