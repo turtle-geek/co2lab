@@ -194,6 +194,17 @@ export interface AiUsage {
   /** Requests (runs) with at least one Gemini call in the window. */
   requests: number;
   groups: AiUsageGroup[];
+  /** The same calls per request, newest first. */
+  runs: AiUsageRun[];
+}
+export interface AiUsageRun {
+  runId: string;
+  firstAt: number;
+  calls: number;
+  tokensIn: number;
+  tokensOut: number;
+  gCo2: number;
+  costUsd: number;
 }
 
 /** One bucket of a device's stored telemetry (GET /api/devices/:id/telemetry). */

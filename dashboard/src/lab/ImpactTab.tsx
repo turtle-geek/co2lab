@@ -134,6 +134,41 @@ export function ImpactTab({ load, runs, devices }: { load(hours: number): Promis
             </dl>
           </section>
 
+          <section className="panel" aria-label="Requests">
+            <h2 className="panel__title">
+              {fmtInt(requests)} request{requests === 1 ? "" : "s"}
+            </h2>
+            <p className="impact__lead">Each request's Gemini use, newest first. A request with more devices and steps uses more.</p>
+            <ol className="impact__rows">
+              {usage.runs.slice(0, 15).map((r) => {
+                const run = runs.find((x) => x.id === r.runId);
+                const pct = totalG ? (100 * r.gCo2) / totalG : 0;
+                const d = new Date(r.firstAt);
+                const when = d.toDateString() === new Date().toDateString()
+                  ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+                  : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+                return (
+                  <li key={r.runId} className="impact__row">
+                    <span className="impact__name" title={run?.prompt}>
+                      {run?.title || run?.prompt || "Earlier request"}
+                      <small>
+                        {when} · {fmtInt(r.tokensIn + r.tokensOut)} tokens · {fmtInt(r.calls)} call{r.calls === 1 ? "" : "s"}
+                      </small>
+                    </span>
+                    <span className="impact__track" aria-hidden>
+                      <span className="impact__seg" style={{ width: `${pct}%`, background: BAR }} />
+                    </span>
+                    <span className="impact__value">
+                      {fmtGrams(r.gCo2)}
+                      <small>{Math.round(pct)}%</small>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            {usage.runs.length > 15 && <p className="impact__note">Showing the latest 15 of {fmtInt(usage.runs.length)}.</p>}
+          </section>
+
           <section className="panel" aria-label="Where the AI footprint comes from">
             <h2 className="panel__title">Where the AI footprint comes from</h2>
             {top && (

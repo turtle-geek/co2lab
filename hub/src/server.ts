@@ -1,6 +1,6 @@
 // Co2lab hub entry point: Fastify HTTP + ws WebSocket on one port.
 
-import type { AiUsage, ModelTier } from "@co2lab/shared";
+import type { AiUsage, AiUsageRun, ModelTier } from "@co2lab/shared";
 import { burnFor } from "./burn.js";
 import { createReadStream, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -138,15 +138,31 @@ app.get("/api/impact", async (req: FastifyRequest<{ Querystring: { viewer?: stri
   if (!isOwner(req) && !(await hub.viewerTokenValid(req.query.viewer))) return reply.code(401).send({ error: "unauthorized" });
   const hours = Math.min(24 * 30, Math.max(1, Number(req.query.hours) || 24));
   const since = Date.now() - hours * 3_600_000;
-  const { requests, groups } = await repo.aiUsage(since);
+  const { requests, groups, runs } = await repo.aiUsage(since);
+  const tierOf = (t: string): ModelTier => (t === "lite" || t === "pro" ? t : "flash");
+  const perRun = new Map<string, AiUsageRun>();
+  for (const r of runs) {
+    const b = burnFor(tierOf(r.tier), r.tokensIn, r.tokensOut);
+    const cur = perRun.get(r.runId) ?? { runId: r.runId, firstAt: r.firstAt, calls: 0, tokensIn: 0, tokensOut: 0, gCo2: 0, costUsd: 0 };
+    perRun.set(r.runId, {
+      ...cur,
+      firstAt: Math.min(cur.firstAt, r.firstAt),
+      calls: cur.calls + r.calls,
+      tokensIn: cur.tokensIn + r.tokensIn,
+      tokensOut: cur.tokensOut + r.tokensOut,
+      gCo2: cur.gCo2 + b.gCo2,
+      costUsd: cur.costUsd + b.costUsd,
+    });
+  }
   const usage: AiUsage = {
     since,
     requests,
     groups: groups.map((g) => {
-      const tier: ModelTier = g.tier === "lite" || g.tier === "pro" ? g.tier : "flash";
+      const tier = tierOf(g.tier);
       const b = burnFor(tier, g.tokensIn, g.tokensOut);
       return { ...g, tier, gCo2: b.gCo2, energyWh: b.energyWh, costUsd: b.costUsd };
     }),
+    runs: [...perRun.values()].sort((a, b) => b.firstAt - a.firstAt),
   };
   return usage;
 });

@@ -35,11 +35,19 @@ export class MemoryRepository implements Repository {
   }
   async aiUsage(sinceMs: number) {
     const groups = new Map<string, { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number }>();
-    const runs = new Set<string>();
+    const runs = new Map<string, { runId: string; tier: string; firstAt: number; calls: number; tokensIn: number; tokensOut: number }>();
     for (const s of this.steps) {
       if (s.time < sinceMs || s.tokensIn + s.tokensOut <= 0) continue;
-      if (s.runId) runs.add(s.runId);
       const tier = typeof s.detail.tier === "string" ? s.detail.tier : "flash";
+      if (s.runId) {
+        const rk = `${s.runId}|${tier}`;
+        const r = runs.get(rk) ?? { runId: s.runId, tier, firstAt: s.time, calls: 0, tokensIn: 0, tokensOut: 0 };
+        r.firstAt = Math.min(r.firstAt, s.time);
+        r.calls += 1;
+        r.tokensIn += s.tokensIn;
+        r.tokensOut += s.tokensOut;
+        runs.set(rk, r);
+      }
       const key = `${s.deviceId}|${s.kind}|${tier}`;
       const g = groups.get(key) ?? { deviceId: s.deviceId, kind: s.kind, tier, calls: 0, tokensIn: 0, tokensOut: 0 };
       g.calls += 1;
@@ -47,7 +55,8 @@ export class MemoryRepository implements Repository {
       g.tokensOut += s.tokensOut;
       groups.set(key, g);
     }
-    return { requests: runs.size, groups: [...groups.values()] };
+    const list = [...runs.values()];
+    return { requests: new Set(list.map((r) => r.runId)).size, groups: [...groups.values()], runs: list };
   }
 
   async telemetryHistory(deviceId: string, sinceMs: number, bucketMs: number): Promise<TelemetryPoint[]> {

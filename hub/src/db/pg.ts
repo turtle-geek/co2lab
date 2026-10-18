@@ -144,10 +144,16 @@ export class PgRepository implements Repository {
          from agent_step where ${where} group by 1, 2, 3`,
       [ts(sinceMs)],
     );
-    const { rows: r2 } = await this.q(`select count(distinct run_id)::int as n from agent_step where ${where}`, [ts(sinceMs)]);
+    const { rows: perRun } = await this.q(
+      `select run_id, coalesce(detail->>'tier', 'flash') as tier, min(time) as first_at, count(*)::int as calls,
+              sum(tokens_in)::float8 as tin, sum(tokens_out)::float8 as tout
+         from agent_step where ${where} and run_id is not null group by 1, 2`,
+      [ts(sinceMs)],
+    );
     return {
-      requests: r2[0]?.n ?? 0,
+      requests: new Set(perRun.map((r) => r.run_id)).size,
       groups: rows.map((r) => ({ deviceId: r.device_id, kind: r.kind, tier: r.tier, calls: r.calls, tokensIn: r.tin, tokensOut: r.tout })),
+      runs: perRun.map((r) => ({ runId: r.run_id, tier: r.tier, firstAt: new Date(r.first_at).getTime(), calls: r.calls, tokensIn: r.tin, tokensOut: r.tout })),
     };
   }
 

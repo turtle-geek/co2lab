@@ -1761,9 +1761,10 @@ code {
 .card-slot > .tree-card { height: 100%; }
 
 /* Lab section switch (Research | Compute experiments) */
-.lab-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--card); margin-bottom: 12px; align-self: flex-start; }
-.lab-switch button { border: 0; background: transparent; padding: 8px 16px; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; }
-.lab-switch button.seg__on { background: var(--green-pill); color: var(--green-deep); }
+/* Lab switches look like the main tabs: a soft pill track, the active option a rounded pill */
+.lab-switch { display: inline-flex; gap: 4px; padding: 4px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.5); margin-bottom: 12px; align-self: flex-start; }
+.lab-switch button { border: 0; background: transparent; padding: 6px 16px; border-radius: 999px; font: inherit; font-weight: 700; color: var(--ink-2); cursor: pointer; }
+.lab-switch button.seg__on { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
 .burn__sub { font-size: 0.72rem; color: var(--muted); }
 .burn__stat--green b { color: var(--green-deep); }
 
