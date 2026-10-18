@@ -5,7 +5,7 @@
 // Energy: Google reported (Aug 2025) the median Gemini Apps text prompt uses about 0.24 Wh and
 //   emits about 0.03 gCO2e. We treat a "median prompt" as ~1,000 tokens and scale by tier
 //   (lite 0.4x, flash 1x, pro 4x). Emissions use the same ratio: 0.03 g / 0.24 Wh = 0.125 gCO2e per Wh.
-//   Device-side energy (phone, laptop) is not included.
+//   Device-side energy (phone, laptop) is added by the dashboard (dashboard/src/footprint.ts).
 
 import type { Burn, ModelTier } from "@co2lab/shared";
 

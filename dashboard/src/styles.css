@@ -1879,3 +1879,7 @@ code {
 .battery--charging .battery__fill { fill: #bfe0a8; }
 .battery__bolt { fill: #4a3020; }
 .thermo__fill { fill: var(--red); }
+
+/* Devices tab: embodied carbon of the paired old devices */
+.reuse { margin: 0 0 12px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--green-soft); color: var(--green-deep); font-size: 0.95rem; }
+.reuse b { color: var(--green-deep); }

@@ -439,6 +439,8 @@ export class MockHub {
         }
         s.view.status = "running";
         s.view.deviceId = dev.id;
+        s.view.startedAt = Date.now();
+        s.view.finishedAt = null;
         s.stepIndex = 0;
         this.patch(dev.id, { state: "working", currentTask: { subtaskId: s.view.id, capability: s.view.capability, label: SCRIPTS[s.view.capability]!.label, progress: 0 } });
       }
@@ -484,6 +486,7 @@ export class MockHub {
           const reason = `${script.label} shows a sign-in screen on ${dev.name}`;
           s.view.status = "failed";
           s.view.error = reason;
+          s.view.finishedAt = Date.now();
           this.patch(dev.id, { state: "error", currentTask: null, note: reason });
           setTimeout(() => {
             if (this.forced.has(dev.id)) return;
@@ -495,6 +498,7 @@ export class MockHub {
         s.stepIndex += 1;
         if (s.stepIndex >= script.steps.length) {
           s.view.status = "done";
+          s.view.finishedAt = Date.now();
           s.view.dealCount = script.deals.length;
           for (const deal of script.deals) run.collected.push({ deal, deviceId: dev.id });
           this.patch(dev.id, { state: this.forced.get(dev.id) ?? "idle", currentTask: null });
