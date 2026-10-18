@@ -1759,6 +1759,9 @@ code {
 .card-slot--dragging { position: relative; z-index: 5; cursor: grabbing; user-select: none; }
 .card-slot--dragging .tree-card { box-shadow: 0 18px 40px rgba(40, 50, 40, 0.22); }
 .card-slot > .tree-card { height: 100%; }
+/* the card that will swap places if you let go here */
+.card-slot--target .tree-card { outline: 2px dashed var(--green, #4f9a4a); outline-offset: 3px; transform: scale(0.97); transition: transform 160ms ease; }
+.card-slot .tree-card { transition: transform 160ms ease; }
 
 /* Lab section switch (Research | Compute experiments) */
 .lab-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--card); margin-bottom: 12px; align-self: flex-start; }
