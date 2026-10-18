@@ -142,14 +142,14 @@ export function DeviceGrid({
   onRevoke(id: string): void;
   onAdd(): void;
 }) {
-  const { ordered, dragId, overId, cardRef, dragProps } = useCardOrder(devices, !readOnly);
+  const { ordered, dragId, cardRef, dragProps } = useCardOrder(devices, !readOnly);
   return (
     <section className="device-grid" aria-label="Devices">
       {ordered.map((d) => (
         <div
           key={d.id}
           ref={(el) => cardRef(d.id, el)}
-          className={dragId === d.id ? "card-slot card-slot--dragging" : overId === d.id ? "card-slot card-slot--target" : "card-slot"}
+          className={dragId === d.id ? "card-slot card-slot--dragging" : "card-slot"}
           {...dragProps(d.id)}
         >
           <TreeCard device={d} readOnly={readOnly} onRevoke={onRevoke} frame={frames?.[d.id]} />
@@ -194,13 +194,13 @@ const SWAP_COVER = 0.5;
 
 /**
  * Free dragging: the card follows the pointer anywhere (mouse or touch) and nothing else moves meanwhile.
- * The card it covers by half or more is highlighted; letting go there swaps the two (both glide, FLIP),
- * letting go anywhere else glides it back to its own slot. The order is remembered here.
+ * When it covers another card by half or more, that card slides over into the dragged card's slot (and
+ * slides back if you move off); letting go there keeps the swap, anywhere else glides the card back.
+ * The order is remembered here.
  */
 function useCardOrder(devices: DeviceView[], enabled: boolean) {
   const [order, setOrder] = useState<string[]>(loadOrder);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
   const overRef = useRef<string | null>(null);
   const els = useRef(new Map<string, HTMLElement>());
   const before = useRef(new Map<string, DOMRect>());
@@ -269,7 +269,15 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
     }
   }
 
-  /** The card the dragged one covers most, if it covers at least SWAP_COVER of it. */
+  /** A card's own slot on screen, ignoring any slide it is doing (so a sliding card can't flicker). */
+  function slotRect(el: HTMLElement) {
+    const grid = el.offsetParent?.getBoundingClientRect() ?? { left: 0, top: 0 };
+    const left = grid.left + el.offsetLeft;
+    const top = grid.top + el.offsetTop;
+    return { left, top, right: left + el.offsetWidth, bottom: top + el.offsetHeight, width: el.offsetWidth, height: el.offsetHeight };
+  }
+
+  /** The card the dragged one covers most, if it covers at least SWAP_COVER of that card's slot. */
   function coveredCard(self: string): string | null {
     const me = els.current.get(self)?.getBoundingClientRect();
     if (!me) return null;
@@ -277,7 +285,7 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
     let bestCover = SWAP_COVER;
     for (const [id, el] of els.current) {
       if (id === self) continue;
-      const r = el.getBoundingClientRect();
+      const r = slotRect(el);
       const w = Math.min(me.right, r.right) - Math.max(me.left, r.left);
       const h = Math.min(me.bottom, r.bottom) - Math.max(me.top, r.top);
       if (w <= 0 || h <= 0) continue;
@@ -290,17 +298,30 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
     return best;
   }
 
+  /** Slides the covered card over into the dragged card's slot, and the previous one back home. */
   function setOver(id: string | null) {
-    if (overRef.current === id) return;
+    const prev = overRef.current;
+    if (prev === id) return;
     overRef.current = id;
-    setOverId(id);
+    const glide = "transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+    const back = prev ? els.current.get(prev) : undefined;
+    if (back) {
+      back.style.transition = glide;
+      back.style.transform = "";
+    }
+    const self = drag.current ? els.current.get(drag.current.id) : undefined;
+    const el = id ? els.current.get(id) : undefined;
+    if (el && self) {
+      el.style.transition = glide;
+      el.style.transform = `translate(${self.offsetLeft - el.offsetLeft}px, ${self.offsetTop - el.offsetTop}px)`;
+    }
   }
 
   function end() {
     const d = drag.current;
     drag.current = null;
     const target = overRef.current;
-    setOver(null);
+    overRef.current = null; // the covered card stays where it slid to; the swap below makes that its slot
     setDragId(null);
     if (!d?.active) return;
     if (target) return swap(d.id, target);
@@ -315,7 +336,6 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
   return {
     ordered,
     dragId,
-    overId,
     cardRef: (id: string, el: HTMLElement | null) => {
       if (el) els.current.set(id, el);
       else els.current.delete(id);
