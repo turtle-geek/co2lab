@@ -1944,3 +1944,5 @@ code {
 .impact__callout p { margin: 0; flex: 1 1 280px; color: var(--ink-2); font-size: 0.9rem; }
 .impact__callout b { color: var(--ink); }
 .impact__name small { white-space: normal; }
+.exp-drafts { margin-top: 12px; }
+.exp-drafts > summary { cursor: pointer; color: var(--muted); font-weight: 700; font-size: 0.88rem; padding: 6px 0; }

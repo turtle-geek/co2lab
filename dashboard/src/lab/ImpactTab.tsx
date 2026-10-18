@@ -3,7 +3,7 @@
 // footprint down by what the AI was doing and which device's work it was for, as shares of the whole.
 
 import { useEffect, useState } from "react";
-import type { AiUsage, AiUsageGroup, DeviceView, RunView } from "@co2lab/shared";
+import type { AiUsage, AiUsageGroup, AiUsageRun, DeviceView, RunView } from "@co2lab/shared";
 import { NEW_MACHINE, fmtGrams } from "../footprint";
 import { fmtInt, fmtUsd } from "../format";
 
@@ -83,11 +83,21 @@ export function ImpactTab({
   const perRequest = requests ? totalG / requests : 0;
   const fitInMacMini = perRequest ? Math.round((NEW_MACHINE.kgCo2e * 1000) / perRequest) : 0;
 
-  const name = (id: string) => (id === "hub" ? "Hub (planning and answers)" : devices.find((d) => d.id === id)?.name ?? "Removed device");
+  // A device re-paired several times has several ids; merge them by the name the hub has on record.
+  const name = (id: string) =>
+    id === "hub" ? "Hub (planning and answers)" : usage?.devices.find((d) => d.id === id)?.name ?? devices.find((d) => d.id === id)?.name ?? "Unknown device";
   const byKind = sum(groups, (g) => g.kind, (k) => KIND[k]?.label ?? k);
-  const byDevice = sum(groups, (g) => g.deviceId ?? "hub", name);
+  const byDevice = sum(groups, (g) => (g.deviceId ? name(g.deviceId) : "Hub (planning and answers)"), (k) => k);
   const tierTokens = sum(groups, (g) => g.tier, (t) => t[0]!.toUpperCase() + t.slice(1));
   const top = byKind[0];
+
+  // Requests: completed ones are listed; research captures and failed/cancelled tries are summed in one line each.
+  const allRuns = usage?.runs ?? [];
+  const isLab = (r: AiUsageRun) => (r.prompt ?? "").startsWith("Lab capture:");
+  const completed = allRuns.filter((r) => !isLab(r) && r.status === "done");
+  const lab = allRuns.filter(isLab);
+  const other = allRuns.filter((r) => !isLab(r) && r.status !== "done");
+  const gOf = (rs: AiUsageRun[]) => rs.reduce((n, r) => n + r.gCo2, 0);
 
   return (
     <div className="impact">
@@ -153,11 +163,11 @@ export function ImpactTab({
 
           <section className="panel" aria-label="Requests">
             <h2 className="panel__title">
-              {fmtInt(requests)} request{requests === 1 ? "" : "s"}
+              {fmtInt(completed.length)} completed request{completed.length === 1 ? "" : "s"}
             </h2>
             <p className="impact__lead">Each request's Gemini use, newest first. A request with more devices and steps uses more.</p>
             <ol className="impact__rows">
-              {usage.runs.slice(0, 15).map((r) => {
+              {completed.slice(0, 15).map((r) => {
                 const run = runs.find((x) => x.id === r.runId);
                 const pct = totalG ? (100 * r.gCo2) / totalG : 0;
                 const d = new Date(r.firstAt);
@@ -166,8 +176,8 @@ export function ImpactTab({
                   : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
                 return (
                   <li key={r.runId} className="impact__row">
-                    <span className="impact__name" title={run?.prompt}>
-                      {run?.title || run?.prompt || "Earlier request"}
+                    <span className="impact__name" title={r.prompt ?? undefined}>
+                      {run?.title || r.prompt || "Earlier request"}
                       <small>
                         {when} · {fmtInt(r.tokensIn + r.tokensOut)} tokens · {fmtInt(r.calls)} call{r.calls === 1 ? "" : "s"}
                       </small>
@@ -183,7 +193,24 @@ export function ImpactTab({
                 );
               })}
             </ol>
-            {usage.runs.length > 15 && <p className="impact__note">Showing the latest 15 of {fmtInt(usage.runs.length)}.</p>}
+            {completed.length > 15 && <p className="impact__note">Showing the latest 15 of {fmtInt(completed.length)}.</p>}
+            {(other.length > 0 || lab.length > 0) && (
+              <p className="impact__note">
+                {other.length > 0 && (
+                  <>
+                    Also counted: {fmtInt(other.length)} failed or cancelled request{other.length === 1 ? "" : "s"} ({fmtGrams(gOf(other))})
+                  </>
+                )}
+                {other.length > 0 && lab.length > 0 && " · "}
+                {lab.length > 0 && (
+                  <>
+                    {other.length > 0 ? "" : "Also counted: "}
+                    {fmtInt(lab.length)} Lab research capture{lab.length === 1 ? "" : "s"} ({fmtGrams(gOf(lab))})
+                  </>
+                )}
+                .
+              </p>
+            )}
           </section>
 
           <section className="panel" aria-label="Where the AI footprint comes from">

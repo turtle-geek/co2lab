@@ -198,9 +198,14 @@ export interface AiUsage {
   groups: AiUsageGroup[];
   /** The same calls per request, newest first. */
   runs: AiUsageRun[];
+  /** Every device that ever paired (revoked ones too), so old pairings of the same device can be merged by name. */
+  devices: { id: string; name: string; kind: string }[];
 }
 export interface AiUsageRun {
   runId: string;
+  /** The request as typed (or "Lab capture: …" for research captures); null if the run row is gone. */
+  prompt: string | null;
+  status: string | null;
   firstAt: number;
   calls: number;
   tokensIn: number;

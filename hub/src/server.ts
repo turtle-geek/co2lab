@@ -143,7 +143,7 @@ app.get("/api/impact", async (req: FastifyRequest<{ Querystring: { viewer?: stri
   const perRun = new Map<string, AiUsageRun>();
   for (const r of runs) {
     const b = burnFor(tierOf(r.tier), r.tokensIn, r.tokensOut);
-    const cur = perRun.get(r.runId) ?? { runId: r.runId, firstAt: r.firstAt, calls: 0, tokensIn: 0, tokensOut: 0, gCo2: 0, costUsd: 0 };
+    const cur = perRun.get(r.runId) ?? { runId: r.runId, prompt: r.prompt, status: r.status, firstAt: r.firstAt, calls: 0, tokensIn: 0, tokensOut: 0, gCo2: 0, costUsd: 0 };
     perRun.set(r.runId, {
       ...cur,
       firstAt: Math.min(cur.firstAt, r.firstAt),
@@ -163,6 +163,7 @@ app.get("/api/impact", async (req: FastifyRequest<{ Querystring: { viewer?: stri
       return { ...g, tier, gCo2: b.gCo2, energyWh: b.energyWh, costUsd: b.costUsd };
     }),
     runs: [...perRun.values()].sort((a, b) => b.firstAt - a.firstAt),
+    devices: (await repo.listDevices()).map((d) => ({ id: d.id, name: d.name, kind: d.kind })),
   };
   return usage;
 });

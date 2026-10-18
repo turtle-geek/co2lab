@@ -98,7 +98,7 @@ export interface Repository {
     requests: number;
     groups: { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number; imageTokens: number }[];
     /** Per request and model tier. */
-    runs: { runId: string; tier: string; firstAt: number; calls: number; tokensIn: number; tokensOut: number }[];
+    runs: { runId: string; prompt: string | null; status: string | null; tier: string; firstAt: number; calls: number; tokensIn: number; tokensOut: number }[];
   }>;
   /** Stored telemetry since `sinceMs`, averaged into buckets of `bucketMs` (online rows only). */
   telemetryHistory(deviceId: string, sinceMs: number, bucketMs: number): Promise<TelemetryPoint[]>;

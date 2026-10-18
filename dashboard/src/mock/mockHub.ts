@@ -157,6 +157,8 @@ export class MockHub {
     const perRun = new Map<string, AiUsageRun>();
     let runId = "";
     let runAt = 0;
+    let runPrompt: string | null = null;
+    let runStatus: string | null = null;
     const wh = { lite: 0.096, flash: 0.24, pro: 0.96 } as const;
     const price = { lite: [0.1, 0.4], flash: [0.3, 2.5], pro: [1.25, 10] } as const;
     const add = (deviceId: string | null, kind: string, tier: "lite" | "flash", calls: number, tin: number, tout: number, img = 0) => {
@@ -173,7 +175,7 @@ export class MockHub {
         costUsd: g.costUsd + (tin * price[tier][0] + tout * price[tier][1]) / 1e6,
       });
       groups.set(key, g);
-      const r = perRun.get(runId) ?? { runId, firstAt: runAt, calls: 0, tokensIn: 0, tokensOut: 0, gCo2: 0, costUsd: 0 };
+      const r = perRun.get(runId) ?? { runId, prompt: runPrompt, status: runStatus, firstAt: runAt, calls: 0, tokensIn: 0, tokensOut: 0, gCo2: 0, costUsd: 0 };
       Object.assign(r, {
         calls: r.calls + calls,
         tokensIn: r.tokensIn + tin,
@@ -189,6 +191,8 @@ export class MockHub {
       requests += 1;
       runId = r.view.id;
       runAt = r.view.createdAt;
+      runPrompt = r.view.prompt;
+      runStatus = r.view.status;
       add(null, "plan", "flash", 1, 2600, 420);
       for (const s of r.subtasks) {
         if (!s.view.deviceId || s.view.status === "queued") continue;
@@ -198,7 +202,13 @@ export class MockHub {
       }
       if (r.view.status === "done") add(null, "merge", "flash", 1, 2300, 520);
     }
-    return { since, requests, groups: [...groups.values()], runs: [...perRun.values()].sort((a, b) => b.firstAt - a.firstAt) };
+    return {
+      since,
+      requests,
+      groups: [...groups.values()],
+      runs: [...perRun.values()].sort((a, b) => b.firstAt - a.firstAt),
+      devices: [...this.devices.values()].map((d) => ({ id: d.id, name: d.name, kind: d.kind })),
+    };
   }
 
   private addDevice(d: DeviceView) {

@@ -57,6 +57,18 @@ export default function LabTab({ experiments, readOnly, connected, send }: LabPr
   const timeline = useMemo(() => [...experiments].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)), [experiments]);
   const allFeedback = useMemo(() => new Map(experiments.flatMap((e) => e.feedback.map((f) => [f.id, { ...f, on: e.title ?? "experiment" }] as const))), [experiments]);
   const labelCapture = data?.captures.find((c) => c.id === labeling) ?? null;
+  const renderExp = (e: ExperimentView) => (
+    <Experiment
+      key={e.id}
+      e={e}
+      captures={data?.captures ?? []}
+      allFeedback={allFeedback}
+      parentTitle={experiments.find((x) => x.id === e.parentId)?.title ?? null}
+      can={can && !data?.busy}
+      readOnly={readOnly}
+      onFeedback={(kind, text) => act({ type: "research.feedback", experimentId: e.id, kind, text })}
+    />
+  );
 
   return (
     <div className="lab">
@@ -101,19 +113,17 @@ export default function LabTab({ experiments, readOnly, connected, send }: LabPr
         <h2 className="panel__title">Experiments</h2>
         {timeline.length === 0 && <p className="empty">No experiments yet. Capture and label each app, then propose one.</p>}
         <ol className="exp-list">
-          {timeline.map((e) => (
-            <Experiment
-              key={e.id}
-              e={e}
-              captures={data?.captures ?? []}
-              allFeedback={allFeedback}
-              parentTitle={experiments.find((x) => x.id === e.parentId)?.title ?? null}
-              can={can && !data?.busy}
-              readOnly={readOnly}
-              onFeedback={(kind, text) => act({ type: "research.feedback", experimentId: e.id, kind, text })}
-            />
-          ))}
+          {timeline.filter((e) => !e.supersededBy).map(renderExp)}
         </ol>
+        {timeline.some((e) => e.supersededBy) && (
+          <details className="exp-drafts">
+            <summary>
+              Show {timeline.filter((e) => e.supersededBy).length} earlier draft{timeline.filter((e) => e.supersededBy).length === 1 ? "" : "s"} (replaced
+              before they ran)
+            </summary>
+            <ol className="exp-list">{timeline.filter((e) => e.supersededBy).map(renderExp)}</ol>
+          </details>
+        )}
       </section>
 
       <section className="panel">

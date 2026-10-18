@@ -146,15 +146,17 @@ export class PgRepository implements Repository {
       [ts(sinceMs)],
     );
     const { rows: perRun } = await this.q(
-      `select run_id, coalesce(detail->>'tier', 'flash') as tier, min(time) as first_at, count(*)::int as calls,
-              sum(tokens_in)::float8 as tin, sum(tokens_out)::float8 as tout
-         from agent_step where ${where} and run_id is not null group by 1, 2`,
+      `select s.run_id, coalesce(s.detail->>'tier', 'flash') as tier, min(s.time) as first_at, count(*)::int as calls,
+              sum(s.tokens_in)::float8 as tin, sum(s.tokens_out)::float8 as tout, r.prompt, r.status
+         from agent_step s left join run r on r.id = s.run_id
+        where s.time >= $1 and s.tokens_in + s.tokens_out > 0 and s.run_id is not null
+        group by s.run_id, 2, r.prompt, r.status`,
       [ts(sinceMs)],
     );
     return {
       requests: new Set(perRun.map((r) => r.run_id)).size,
       groups: rows.map((r) => ({ deviceId: r.device_id, kind: r.kind, tier: r.tier, calls: r.calls, tokensIn: r.tin, tokensOut: r.tout, imageTokens: r.timg })),
-      runs: perRun.map((r) => ({ runId: r.run_id, tier: r.tier, firstAt: new Date(r.first_at).getTime(), calls: r.calls, tokensIn: r.tin, tokensOut: r.tout })),
+      runs: perRun.map((r) => ({ runId: r.run_id, prompt: r.prompt ?? null, status: r.status ?? null, tier: r.tier, firstAt: new Date(r.first_at).getTime(), calls: r.calls, tokensIn: r.tin, tokensOut: r.tout })),
     };
   }
 

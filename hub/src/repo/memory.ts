@@ -35,13 +35,14 @@ export class MemoryRepository implements Repository {
   }
   async aiUsage(sinceMs: number) {
     const groups = new Map<string, { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number; imageTokens: number }>();
-    const runs = new Map<string, { runId: string; tier: string; firstAt: number; calls: number; tokensIn: number; tokensOut: number }>();
+    const runs = new Map<string, { runId: string; prompt: string | null; status: string | null; tier: string; firstAt: number; calls: number; tokensIn: number; tokensOut: number }>();
     for (const s of this.steps) {
       if (s.time < sinceMs || s.tokensIn + s.tokensOut <= 0) continue;
       const tier = typeof s.detail.tier === "string" ? s.detail.tier : "flash";
       if (s.runId) {
         const rk = `${s.runId}|${tier}`;
-        const r = runs.get(rk) ?? { runId: s.runId, tier, firstAt: s.time, calls: 0, tokensIn: 0, tokensOut: 0 };
+        const run = this.runs.get(s.runId);
+        const r = runs.get(rk) ?? { runId: s.runId, prompt: run?.prompt ?? null, status: run?.status ?? null, tier, firstAt: s.time, calls: 0, tokensIn: 0, tokensOut: 0 };
         r.firstAt = Math.min(r.firstAt, s.time);
         r.calls += 1;
         r.tokensIn += s.tokensIn;
