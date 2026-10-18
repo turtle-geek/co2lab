@@ -68,7 +68,7 @@ function catalogText(devices: CatalogDevice[]): string {
 
 const TOOLS_TEXT =
   "Tools (each task uses exactly one):\n" +
-  "- deals: collect current offers from one built-in source (source = app:tims, app:mcdonalds, app:popeyes need an Android device with that capability; web:redflagdeals needs a web device). Always use this tool (never web) for those four sources; use it for restaurant / food deal requests.\n" +
+  "- deals: collect current offers from one built-in source (source = app:tims, app:mcdonalds, app:popeyes need an Android device with that capability; web:redflagdeals needs a web device). Always use this tool (never web) for those four sources. For restaurant / food deal requests, use EVERY deal source that has an online device (phone apps and web:redflagdeals) unless the request names specific restaurants.\n" +
   "- web: a browser agent on a laptop or the Cloud worker visits sites and reads them to reach the goal. Give a concrete goal and, when you know it, a startUrl (e.g. a Steam store search URL https://store.steampowered.com/search/?term=...&maxprice=20 or a site's search page). One task per site or sub-question; tasks run in parallel on different devices.\n" +
   "  For games, search the Steam store by tag rather than by words in the title, e.g. https://store.steampowered.com/search/?tags=1685&maxprice=20 (1685 = Co-op, 1662 = Survival, 1742 = Story Rich, 3843 = Online Co-Op) and sort by reviews (&filter=topsellers or &sort_by=Reviews_DESC).\n" +
   "- reviews: analyze Steam user reviews on the devices (topics like grind, story, performance, multiplayer, value, content; positive vs negative, by playtime). Needs Steam app IDs (numbers). Use only when you already know the IDs.\n";

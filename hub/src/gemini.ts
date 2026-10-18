@@ -174,6 +174,11 @@ export async function callJson<S extends z.ZodType>(opts: {
           await sleep(RETRY_DELAYS_MS[i]!);
           continue;
         }
+        // Model overloaded (503) or rate-limited on every key: try the same call once on the Lite model.
+        if (err instanceof ApiError && (err.status === 503 || err.status === 429) && opts.tier !== "lite" && config.gemini.models.lite) {
+          log.warn(`gemini ${opts.label}: ${describe(err).slice(0, 80)}; trying the lite model`);
+          return callJson({ ...opts, tier: "lite", label: `${opts.label} (lite)` });
+        }
         throw new Error(describe(err));
       }
     }
