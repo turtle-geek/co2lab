@@ -2,7 +2,7 @@
 
 Run your personal AI agents on the old devices in your drawer instead of new hardware that adds to CO₂ emissions.
 
-A solo project built at Hack the Valley 2026. [Live site](https://co2lab.work)
+A solo project built at Hack the Valley 2026.
 
 ## Overview
 
