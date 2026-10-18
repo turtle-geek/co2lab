@@ -43,7 +43,7 @@ function Screen({ device, frame, step, now, done, run }: { device: DeviceView; f
     <figure className={`screen ${phone ? "screen--phone" : "screen--browser"}${done ? " screen--done" : ""}`}>
       <figcaption className="screen__head">
         <b>{device.name}</b>
-        {task && <span className="screen__task">{task.label || capabilityLabel(task.capability)}</span>}
+        {task && <span className="screen__task" title={task.label || capabilityLabel(task.capability)}>{task.label || capabilityLabel(task.capability)}</span>}
         {!done && (
           <span className="screen__live" aria-label="live">
             ● {frame ? ago(frame.at, now) : "live"}
@@ -68,7 +68,7 @@ function Screen({ device, frame, step, now, done, run }: { device: DeviceView; f
           <div className="browser__glass">{img}</div>
         </div>
       )}
-      <p className="screen__caption" aria-live="polite">
+      <p className="screen__caption" aria-live="polite" title={caption}>
         {caption}
       </p>
     </figure>

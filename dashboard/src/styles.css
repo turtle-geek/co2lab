@@ -1859,3 +1859,10 @@ code {
 .trow--failed .trow__result { color: var(--red); }
 .trow--done .trow__result { color: var(--ink); }
 @media (max-width: 640px) { .trow { grid-template-columns: 20px minmax(0, 1fr) auto; } .trow__device { display: none; } }
+
+/* Screen header and caption keep one line while frames and steps change: long text ends in "…". */
+.screen__head { flex-wrap: nowrap; min-width: 0; white-space: nowrap; }
+.screen__head b { flex: 0 0 auto; }
+.screen__task { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.screen__live { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.screen__caption { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 0; height: 1.35em; line-height: 1.35; }
