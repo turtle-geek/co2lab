@@ -151,7 +151,7 @@ export class MockHub {
    * Mock Gemini usage shaped like the hub's agent_step totals: per request one Flash plan, Lite steering
    * steps on the device, a Flash read of the screen or page, and a Flash answer.
    */
-  aiUsage(hours: number): AiUsage {
+  aiUsage(hours: number, onlyRun: string | null = null): AiUsage {
     const since = Date.now() - hours * 3_600_000;
     const groups = new Map<string, AiUsageGroup>();
     const perRun = new Map<string, AiUsageRun>();
@@ -163,18 +163,21 @@ export class MockHub {
     const price = { lite: [0.1, 0.4], flash: [0.3, 2.5], pro: [1.25, 10] } as const;
     const add = (deviceId: string | null, kind: string, tier: "lite" | "flash", calls: number, tin: number, tout: number, img = 0) => {
       const key = `${deviceId}|${kind}|${tier}`;
-      const g = groups.get(key) ?? { deviceId, kind, tier, calls: 0, tokensIn: 0, tokensOut: 0, imageTokens: 0, gCo2: 0, energyWh: 0, costUsd: 0 };
       const e = ((tin + tout) / 1000) * wh[tier];
-      Object.assign(g, {
-        calls: g.calls + calls,
-        tokensIn: g.tokensIn + tin,
-        tokensOut: g.tokensOut + tout,
-        imageTokens: g.imageTokens + img,
-        energyWh: g.energyWh + e,
-        gCo2: g.gCo2 + e * 0.125,
-        costUsd: g.costUsd + (tin * price[tier][0] + tout * price[tier][1]) / 1e6,
-      });
-      groups.set(key, g);
+      // The per-step / per-device groups follow the request filter; the request list stays complete.
+      if (!onlyRun || runId === onlyRun) {
+        const g = groups.get(key) ?? { deviceId, kind, tier, calls: 0, tokensIn: 0, tokensOut: 0, imageTokens: 0, gCo2: 0, energyWh: 0, costUsd: 0 };
+        Object.assign(g, {
+          calls: g.calls + calls,
+          tokensIn: g.tokensIn + tin,
+          tokensOut: g.tokensOut + tout,
+          imageTokens: g.imageTokens + img,
+          energyWh: g.energyWh + e,
+          gCo2: g.gCo2 + e * 0.125,
+          costUsd: g.costUsd + (tin * price[tier][0] + tout * price[tier][1]) / 1e6,
+        });
+        groups.set(key, g);
+      }
       const r = perRun.get(runId) ?? { runId, prompt: runPrompt, status: runStatus, firstAt: runAt, calls: 0, tokensIn: 0, tokensOut: 0, gCo2: 0, costUsd: 0 };
       Object.assign(r, {
         calls: r.calls + calls,
@@ -749,9 +752,9 @@ export const mockBackend: Backend = {
   async logout() {
     sessionStorage.removeItem(LOGIN_KEY);
   },
-  async aiUsage(hours) {
+  async aiUsage(hours, runId) {
     await new Promise((r) => setTimeout(r, 150));
-    return mockHub.aiUsage(hours);
+    return mockHub.aiUsage(hours, runId ?? null);
   },
   async telemetryHistory(deviceId, minutes) {
     await new Promise((r) => setTimeout(r, 150));

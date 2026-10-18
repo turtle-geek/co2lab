@@ -14,7 +14,8 @@ export interface Backend {
   /** A device's stored battery/temperature readings for the last `minutes` (empty if none). */
   telemetryHistory(deviceId: string, minutes: number): Promise<TelemetryPoint[]>;
   /** Every Gemini call in the last `hours`, summed by device, step kind and model. */
-  aiUsage(hours: number): Promise<AiUsage>;
+  /** `runId`: only that request's calls in `groups` (the request list stays complete). */
+  aiUsage(hours: number, runId?: string | null): Promise<AiUsage>;
   /** Dev-only control panel for the mock hub. Undefined for the real hub. */
   DevPanel?: ComponentType;
 }
@@ -43,9 +44,9 @@ export const realBackend: Backend = {
       /* the socket close below is what matters */
     }
   },
-  async aiUsage(hours) {
+  async aiUsage(hours, runId) {
     const viewer = new URLSearchParams(location.search).get("viewer") ?? new URLSearchParams(location.hash.slice(1)).get("viewer");
-    const res = await fetch(`/api/impact?hours=${hours}${viewer ? `&viewer=${encodeURIComponent(viewer)}` : ""}`, { credentials: "same-origin" });
+    const res = await fetch(`/api/impact?hours=${hours}${runId ? `&runId=${encodeURIComponent(runId)}` : ""}${viewer ? `&viewer=${encodeURIComponent(viewer)}` : ""}`, { credentials: "same-origin" });
     if (!res.ok) throw new Error(`impact ${res.status}`);
     return (await res.json()) as AiUsage;
   },

@@ -134,11 +134,11 @@ app.get("/api/evidence/:file", async (req: FastifyRequest<{ Params: { file: stri
 
 // ---------- AI usage (Lab → Impact): every Gemini call in agent_step, summed ----------
 
-app.get("/api/impact", async (req: FastifyRequest<{ Querystring: { viewer?: string; hours?: string } }>, reply) => {
+app.get("/api/impact", async (req: FastifyRequest<{ Querystring: { viewer?: string; hours?: string; runId?: string } }>, reply) => {
   if (!isOwner(req) && !(await hub.viewerTokenValid(req.query.viewer))) return reply.code(401).send({ error: "unauthorized" });
   const hours = Math.min(24 * 30, Math.max(1, Number(req.query.hours) || 24));
   const since = Date.now() - hours * 3_600_000;
-  const { requests, groups, runs } = await repo.aiUsage(since);
+  const { requests, groups, runs } = await repo.aiUsage(since, req.query.runId || null);
   const tierOf = (t: string): ModelTier => (t === "lite" || t === "pro" ? t : "flash");
   const perRun = new Map<string, AiUsageRun>();
   for (const r of runs) {

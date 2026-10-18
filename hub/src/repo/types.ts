@@ -94,7 +94,7 @@ export interface Repository {
 
   appendTelemetry(t: TelemetryRow): Promise<void>;
   /** Gemini calls since `sinceMs`, summed per device / step kind / model tier, and the requests they served. */
-  aiUsage(sinceMs: number): Promise<{
+  aiUsage(sinceMs: number, runId?: string | null): Promise<{
     requests: number;
     groups: { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number; imageTokens: number }[];
     /** Per request and model tier. */

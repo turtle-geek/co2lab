@@ -44,7 +44,7 @@ export function ImpactTab({
   screenshotScale,
   onOpenResearch,
 }: {
-  load(hours: number): Promise<AiUsage>;
+  load(hours: number, runId?: string | null): Promise<AiUsage>;
   runs: RunView[];
   devices: DeviceView[];
   /** Size the agent sends screenshots at now (1 = full size). */
@@ -54,6 +54,9 @@ export function ImpactTab({
   const [hours, setHours] = useState(RANGES[0]!.hours);
   const [usage, setUsage] = useState<AiUsage | null>(null);
   const [failed, setFailed] = useState(false);
+  /** A completed request picked in the list: the breakdowns below show only its calls. */
+  const [picked, setPicked] = useState<string | null>(null);
+  const [focus, setFocus] = useState<AiUsage | null>(null);
   // Refetch when a request changes state (a new run, or one finishing), and every 30 s.
   const runKey = runs.map((r) => `${r.id}:${r.status}`).join(",");
 
@@ -71,13 +74,29 @@ export function ImpactTab({
     };
   }, [hours, load, runKey]);
 
+  useEffect(() => {
+    if (!picked) return setFocus(null);
+    let live = true;
+    setFocus(null);
+    load(hours, picked)
+      .then((u) => live && setFocus(u))
+      .catch(() => live && setPicked(null));
+    return () => {
+      live = false;
+    };
+  }, [picked, hours, load]);
+
   const groups = usage?.groups ?? [];
   const totalG = groups.reduce((n, g) => n + g.gCo2, 0);
   const tokens = groups.reduce((n, g) => n + g.tokensIn + g.tokensOut, 0);
   const calls = groups.reduce((n, g) => n + g.calls, 0);
   const cost = groups.reduce((n, g) => n + g.costUsd, 0);
-  const tokensInAll = groups.reduce((n, g) => n + g.tokensIn, 0);
-  const imageTokens = groups.reduce((n, g) => n + (g.imageTokens ?? 0), 0);
+  // The step / device breakdowns: the whole range, or just the picked request.
+  const bd = picked && focus ? focus.groups : groups;
+  const bdG = bd.reduce((n, g) => n + g.gCo2, 0);
+  const bdTokens = bd.reduce((n, g) => n + g.tokensIn + g.tokensOut, 0);
+  const tokensInAll = bd.reduce((n, g) => n + g.tokensIn, 0);
+  const imageTokens = bd.reduce((n, g) => n + (g.imageTokens ?? 0), 0);
   const imagePct = tokensInAll ? Math.round((100 * imageTokens) / tokensInAll) : 0;
   const requests = usage?.requests ?? 0;
   const perRequest = requests ? totalG / requests : 0;
@@ -86,9 +105,9 @@ export function ImpactTab({
   // A device re-paired several times has several ids; merge them by the name the hub has on record.
   const name = (id: string) =>
     id === "hub" ? "Hub (planning and answers)" : usage?.devices.find((d) => d.id === id)?.name ?? devices.find((d) => d.id === id)?.name ?? "Unknown device";
-  const byKind = sum(groups, (g) => g.kind, (k) => KIND[k]?.label ?? k);
-  const byDevice = sum(groups, (g) => (g.deviceId ? name(g.deviceId) : "Hub (planning and answers)"), (k) => k);
-  const tierTokens = sum(groups, (g) => g.tier, (t) => t[0]!.toUpperCase() + t.slice(1));
+  const byKind = sum(bd, (g) => g.kind, (k) => KIND[k]?.label ?? k);
+  const byDevice = sum(bd, (g) => (g.deviceId ? name(g.deviceId) : "Hub (planning and answers)"), (k) => k);
+  const tierTokens = sum(bd, (g) => g.tier, (t) => t[0]!.toUpperCase() + t.slice(1));
   const top = byKind[0];
 
   // Requests: completed ones are listed; research captures and failed/cancelled tries are summed in one line each.
@@ -98,6 +117,16 @@ export function ImpactTab({
   const lab = allRuns.filter(isLab);
   const other = allRuns.filter((r) => !isLab(r) && r.status !== "done");
   const gOf = (rs: AiUsageRun[]) => rs.reduce((n, r) => n + r.gCo2, 0);
+  const pickedRun = picked ? allRuns.find((r) => r.runId === picked) : undefined;
+  const pickedName = pickedRun ? runs.find((x) => x.id === pickedRun.runId)?.title || pickedRun.prompt || "this request" : null;
+  const scope = pickedName ? (
+    <p className="impact__scope">
+      Showing one request: <b>{pickedName}</b>
+      <button className="link-btn" onClick={() => setPicked(null)}>
+        Show all
+      </button>
+    </p>
+  ) : null;
 
   return (
     <div className="impact">
@@ -165,7 +194,7 @@ export function ImpactTab({
             <h2 className="panel__title">
               {fmtInt(completed.length)} completed request{completed.length === 1 ? "" : "s"}
             </h2>
-            <p className="impact__lead">Each request's Gemini use, newest first. A request with more devices and steps uses more.</p>
+            <p className="impact__lead">Each request's Gemini use, newest first. Click one to see where its footprint came from.</p>
             <ol className="impact__rows">
               {completed.slice(0, 15).map((r) => {
                 const run = runs.find((x) => x.id === r.runId);
@@ -175,7 +204,15 @@ export function ImpactTab({
                   ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
                   : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
                 return (
-                  <li key={r.runId} className="impact__row">
+                  <li
+                    key={r.runId}
+                    className={`impact__row impact__row--pick${picked === r.runId ? " impact__row--on" : ""}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={picked === r.runId}
+                    onClick={() => setPicked((cur) => (cur === r.runId ? null : r.runId))}
+                    onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), setPicked((cur) => (cur === r.runId ? null : r.runId)))}
+                  >
                     <span className="impact__name" title={r.prompt ?? undefined}>
                       {run?.title || r.prompt || "Earlier request"}
                       <small>
@@ -215,9 +252,10 @@ export function ImpactTab({
 
           <section className="panel" aria-label="Where the AI footprint comes from">
             <h2 className="panel__title">Where the AI footprint comes from</h2>
+            {scope}
             {top && (
               <p className="impact__lead">
-                <b>{top.label}</b> is {Math.round((100 * top.g) / totalG)}% of it. {KIND[top.key]?.lever ?? ""}
+                <b>{top.label}</b> is {Math.round((100 * top.g) / bdG)}% of it. {KIND[top.key]?.lever ?? ""}
               </p>
             )}
             <div className="impact__callout">
@@ -233,19 +271,20 @@ export function ImpactTab({
                 Open Research
               </button>
             </div>
-            <Shares parts={byKind} total={totalG} />
+            <Shares parts={byKind} total={bdG} />
           </section>
 
           <section className="panel" aria-label="AI use per device">
             <h2 className="panel__title">AI use per device</h2>
+            {scope}
             <p className="impact__lead">Gemini calls made for each device's tasks. The hub plans each request and writes the answer.</p>
-            <Shares parts={byDevice} total={totalG} />
+            <Shares parts={byDevice} total={bdG} />
             <p className="impact__note">
               Model mix:{" "}
               {tierTokens.map((t, i) => (
                 <span key={t.key}>
                   {i > 0 && " · "}
-                  {t.label} {Math.round((100 * t.tokens) / tokens)}% of tokens
+                  {t.label} {Math.round((100 * t.tokens) / bdTokens)}% of tokens
                 </span>
               ))}
               . Lite uses about 40% of Flash's energy per token.

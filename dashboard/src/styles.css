@@ -1948,3 +1948,8 @@ code {
 .exp-drafts > summary { cursor: pointer; color: var(--muted); font-weight: 700; font-size: 0.88rem; padding: 6px 0; }
 .results__title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .results__clear { font-size: 0.85rem; font-weight: 700; flex: 0 0 auto; }
+/* Impact: pick a request to filter the breakdowns */
+.impact__row--pick { cursor: pointer; }
+.impact__row--on { background: var(--green-pill) !important; box-shadow: inset 3px 0 0 var(--green); }
+.impact__scope { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 8px; padding: 6px 10px; border-radius: 10px; background: var(--green-pill); color: var(--green-deep); font-size: 0.88rem; }
+.impact__scope b { color: var(--ink); }
