@@ -179,6 +179,13 @@ function liveSrc(d: DeviceView, frame: LiveFrame | undefined, now: number): stri
 
 const ORDER_KEY = "co2lab.deviceOrder";
 
+/** A 1x1 transparent image used as the drag preview. */
+const BLANK_DRAG_IMAGE = (() => {
+  const img = new Image();
+  img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+  return img;
+})();
+
 function loadOrder(): string[] {
   try {
     const v = JSON.parse(localStorage.getItem(ORDER_KEY) ?? "[]");
@@ -255,6 +262,8 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
               setDragId(id);
               e.dataTransfer.effectAllowed = "move";
               e.dataTransfer.setData("text/plain", id);
+              // Hide the browser's see-through drag copy: the real card stays solid and slides into place.
+              e.dataTransfer.setDragImage(BLANK_DRAG_IMAGE, 0, 0);
             },
             onDragEnter: (e: DragEvent<HTMLElement>) => {
               e.preventDefault();

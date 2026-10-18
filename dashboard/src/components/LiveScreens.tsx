@@ -1,4 +1,4 @@
-import type { DeviceView } from "@co2lab/shared";
+import type { DeviceView, RunView } from "@co2lab/shared";
 import type { LiveFrame, LiveStep } from "../state/hubState";
 import { ago, capabilityLabel, useNow } from "../format";
 
@@ -47,21 +47,29 @@ function Screen({ device, frame, step, now, done }: { device: DeviceView; frame?
   );
 }
 
+/** Devices that take part in this request (or are working right now): they get a screen. */
+export function screenDevices(devices: DeviceView[], run: RunView | null | undefined): DeviceView[] {
+  const inRun = new Set((run?.subtasks ?? []).map((s) => s.deviceId).filter((id): id is string => !!id));
+  return devices.filter((d) => d.state !== "revoked" && (inRun.has(d.id) || d.state === "working" || !!d.currentTask));
+}
+
 /**
- * One permanent screen per device (never appears or disappears mid-run): live while the device works,
- * otherwise its last screen, dimmed, with when it was taken.
+ * A screen per device that takes part in the current request. A screen slides in when its device
+ * starts and then keeps its slot (with the last frame) until the next request, so nothing jumps.
  */
 export function LiveScreens({
   devices,
   frames,
   steps,
+  run,
 }: {
   devices: DeviceView[];
   frames: Record<string, LiveFrame>;
   steps: Record<string, LiveStep>;
+  run?: RunView | null;
 }) {
   const now = useNow();
-  const shown = devices.filter((d) => d.state !== "revoked");
+  const shown = screenDevices(devices, run);
   if (!shown.length) return null;
   return (
     <section className="panel live" aria-label="Screens">

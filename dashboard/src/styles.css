@@ -1741,8 +1741,8 @@ code {
 /* Draggable device cards */
 .device-grid > .card-slot { display: block; will-change: transform; }
 .device-grid > .card-slot[draggable="true"] { cursor: grab; }
-.card-slot--dragging { opacity: 0.55; transition: opacity 0.15s ease; }
-.card-slot--dragging .tree-card { box-shadow: 0 12px 30px rgba(40, 50, 40, 0.18); }
+.card-slot--dragging { position: relative; z-index: 2; transform: scale(1.03); transition: transform 0.15s ease; }
+.card-slot--dragging .tree-card { box-shadow: 0 18px 40px rgba(40, 50, 40, 0.22); }
 .card-slot > .tree-card { height: 100%; }
 
 /* Lab section switch (Research | Compute experiments) */
@@ -1781,6 +1781,24 @@ code {
 /* Agent tab: steps + answer on the left, the devices' screens on the right. */
 .agent { display: grid; gap: 16px; align-items: start; }
 @media (min-width: 1000px) {
-  .agent { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+  /* columns only when there are screens; the change animates (grid-template-columns interpolates in modern browsers) */
+  .agent { grid-template-columns: minmax(0, 1fr) minmax(0, 0fr); transition: grid-template-columns 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .agent--screens { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
   .agent > .live { position: sticky; top: 12px; }
 }
+.agent > .live { animation: screens-in 0.45s ease both; }
+.agent .screen { animation: screen-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes screens-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes screen-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .agent, .agent > .live, .agent .screen { transition: none; animation: none; } }
+
+/* Finished run: steps folded under the answer */
+.steps-fold { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; }
+.steps-fold > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; color: var(--muted); font-size: 0.9rem; }
+.steps-fold > summary::-webkit-details-marker { display: none; }
+.steps-fold > summary .step__icon { width: 20px; height: 20px; }
+.steps-fold__open { margin-left: auto; color: var(--green-deep); font-weight: 800; }
+.steps-fold[open] .steps-fold__open::after { content: " ▴"; }
+.steps-fold:not([open]) .steps-fold__open::after { content: " ▾"; }
+.step__icon svg { display: block; }
+.answer { animation: rise 0.4s ease both; }

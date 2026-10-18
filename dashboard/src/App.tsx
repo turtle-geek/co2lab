@@ -4,7 +4,7 @@ import { useHub } from "./net/useHub";
 import { currentRun } from "./state/hubState";
 import { DeviceGrid } from "./components/DeviceGrid";
 import { AskBar, BurnMeter } from "./components/AskBar";
-import { LiveScreens } from "./components/LiveScreens";
+import { LiveScreens, screenDevices } from "./components/LiveScreens";
 import { RunBanner } from "./components/TeamStrip";
 import { Approvals, Results } from "./components/Results";
 import { PairDialog, ShareDialog } from "./components/Dialogs";
@@ -170,7 +170,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
           </div>
           {tab === "agent" ? (
             // Agent: the steps and answer next to the screens of the devices doing the work.
-            <div className="agent">
+            <div className={screenDevices(state.devices, run).length ? "agent agent--screens" : "agent"}>
               <Results
                 run={run}
                 devices={state.devices}
@@ -186,7 +186,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
                   onRespond={(id, approve) => hub.send({ type: "approval.respond", approvalId: id, approve })}
                 />
               </Results>
-              <LiveScreens devices={state.devices} frames={state.frames} steps={state.steps} />
+              <LiveScreens devices={state.devices} frames={state.frames} steps={state.steps} run={run} />
             </div>
           ) : (
             <>

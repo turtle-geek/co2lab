@@ -88,10 +88,22 @@ type StepState = "done" | "running" | "waiting" | "failed" | "skipped";
 
 function StepIcon({ state }: { state: StepState }) {
   if (state === "running") return <span className="step__icon step__icon--running" aria-label="running" />;
-  const glyph = { done: "✓", waiting: "", failed: "✕", skipped: "–" }[state];
+  // Drawn marks (not font glyphs) so they look the same everywhere: a straight check, a cross, a dash.
+  const mark =
+    state === "done" ? (
+      <path d="M6.5 12.5 L10.5 16.5 L17.5 8" />
+    ) : state === "failed" ? (
+      <path d="M8 8 L16 16 M16 8 L8 16" />
+    ) : state === "skipped" ? (
+      <path d="M8 12 H16" />
+    ) : null;
   return (
     <span className={`step__icon step__icon--${state}`} aria-label={state}>
-      {glyph}
+      {mark && (
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          {mark}
+        </svg>
+      )}
     </span>
   );
 }
@@ -325,56 +337,78 @@ export function Results({
     );
   }
 
+  const finished = run.status === "done" || run.status === "failed";
+  const outcome = (
+    <>
+        {run.answer && (
+          <div className="answer">
+            <p className="answer__text">{run.answer.text}</p>
+            {run.answer.items.length > 0 && (
+              <ol className="deals">
+                {run.answer.items.map((it, i) => (
+                  <ResultRow
+                    key={i}
+                    rank={i + 1}
+                    chip={it.source}
+                    chipClass="deal__source--agent"
+                    title={it.title}
+                    url={it.url}
+                    price={it.price}
+                    lines={[it.detail]}
+                    foot={deviceName(it.deviceId) ? `found by ${deviceName(it.deviceId)}` : null}
+                  />
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
+        {run.status === "failed" && (
+          <div className="results__failed">
+            <b>Run failed.</b> {run.error ?? "No task finished."}
+          </div>
+        )}
+  
+        {run.ranked && (
+          <>
+            {run.ranked.length === 0 ? (
+              <p className="empty">No deals found in any source.</p>
+            ) : (
+              <ol className="deals">
+                {run.ranked.map((d) => (
+                  <DealCard key={`${d.rank}-${d.title}`} d={d} deviceName={deviceName} />
+                ))}
+              </ol>
+            )}
+            {!readOnly && run.status === "done" && run.ranked.length > 0 && (
+              <ShareToGroup disabled={!connected} onShare={(t) => onShare(run.id, t)} />
+            )}
+          </>
+        )}
+      </>
+  );
   return (
     <section className="panel results" aria-label="Results">
       <h2 className="panel__title">
         Agent run <span className="results__prompt">“{run.prompt}”</span>
       </h2>
 
-      <Steps run={run} deviceName={deviceName} />
-      {run.answer && (
-        <div className="answer">
-          <p className="answer__text">{run.answer.text}</p>
-          {run.answer.items.length > 0 && (
-            <ol className="deals">
-              {run.answer.items.map((it, i) => (
-                <ResultRow
-                  key={i}
-                  rank={i + 1}
-                  chip={it.source}
-                  chipClass="deal__source--agent"
-                  title={it.title}
-                  url={it.url}
-                  price={it.price}
-                  lines={[it.detail]}
-                  foot={deviceName(it.deviceId) ? `found by ${deviceName(it.deviceId)}` : null}
-                />
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
-      {run.status === "failed" && (
-        <div className="results__failed">
-          <b>Run failed.</b> {run.error ?? "No task finished."}
-        </div>
-      )}
-
-      {run.ranked && (
+      {finished ? (
+        // Finished: the answer is the main thing; the steps fold into one line you can open.
         <>
-          {run.ranked.length === 0 ? (
-            <p className="empty">No deals found in any source.</p>
-          ) : (
-            <ol className="deals">
-              {run.ranked.map((d) => (
-                <DealCard key={`${d.rank}-${d.title}`} d={d} deviceName={deviceName} />
-              ))}
-            </ol>
-          )}
-          {!readOnly && run.status === "done" && run.ranked.length > 0 && (
-            <ShareToGroup disabled={!connected} onShare={(t) => onShare(run.id, t)} />
-          )}
+          {outcome}
+          <details className="steps-fold">
+            <summary>
+              <StepIcon state={run.status === "failed" ? "failed" : "done"} />
+              <span>
+                {run.subtasks.length + 2} steps · {Math.max(1, Math.round(((run.finishedAt ?? Date.now()) - run.createdAt) / 1000))} s
+              </span>
+              <span className="steps-fold__open">Show steps</span>
+            </summary>
+            <Steps run={run} deviceName={deviceName} />
+          </details>
         </>
+      ) : (
+        <Steps run={run} deviceName={deviceName} />
       )}
       {children}
     </section>
