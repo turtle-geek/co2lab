@@ -175,6 +175,8 @@ export class RunManager {
         tool: s.source === "agent" ? (this.general.get(s.id)?.tool ?? "web") : "deals",
         startedAt: s.startedAt,
         finishedAt: s.finishedAt,
+        deviceKind: s.deviceId ? this.deps.devices.describe(s.deviceId)?.kind : undefined,
+        deviceName: s.deviceId ? this.deps.devices.describe(s.deviceId)?.name : undefined,
       })),
       ranked: r.ranked,
       answer: r.answer ?? null,

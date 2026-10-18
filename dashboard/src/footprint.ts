@@ -30,8 +30,10 @@ export function deviceUse(run: RunView | null, devices: DeviceView[]): DeviceUse
   const per = new Map<string, number>();
   for (const st of run?.subtasks ?? []) {
     if (!st.deviceId || !st.startedAt) continue;
-    const k = kind.get(st.deviceId);
+    // The task's own deviceKind covers devices that were removed or re-paired since.
+    const k = kind.get(st.deviceId) ?? st.deviceKind;
     if (!k || k === "cloud") continue;
+    if (!kind.has(st.deviceId)) kind.set(st.deviceId, k);
     const end = st.finishedAt ?? Date.now();
     per.set(st.deviceId, (per.get(st.deviceId) ?? 0) + Math.max(0, end - st.startedAt));
   }

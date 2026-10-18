@@ -76,13 +76,23 @@ export class DeviceRegistry {
   private devices = new Map<string, LiveDevice>();
   private byHash = new Map<string, string>();
 
+  /** Name and kind of every device ever loaded or paired, kept after removal (for past runs). */
+  private known = new Map<string, { name: string; kind: DeviceRecord["kind"] }>();
+
   constructor(private repo: Repository) {}
+
+  /** What a device was, even if it has since been removed. */
+  describe(id: string): { name: string; kind: DeviceRecord["kind"] } | undefined {
+    const live = this.devices.get(id);
+    return live ? { name: live.rec.name, kind: live.rec.kind } : this.known.get(id);
+  }
 
   async load() {
     for (const rec of await this.repo.listDevices()) this.track(rec);
   }
 
   private track(rec: DeviceRecord): LiveDevice {
+    this.known.set(rec.id, { name: rec.name, kind: rec.kind });
     const d: LiveDevice = {
       rec,
       socket: null,
@@ -213,6 +223,7 @@ export class DeviceRegistry {
   }
 
   remove(d: LiveDevice) {
+    this.known.set(d.rec.id, { name: d.rec.name, kind: d.rec.kind });
     this.devices.delete(d.rec.id);
     this.byHash.delete(d.rec.tokenHash);
   }

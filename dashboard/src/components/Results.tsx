@@ -145,7 +145,6 @@ function cancelNote(run: RunView): string {
 
 function Steps({ run, devices }: { run: RunView; devices: DeviceView[] }) {
   const now = useNow();
-  const deviceName = (id: string | null) => (id ? devices.find((d) => d.id === id)?.name ?? "removed device" : null);
   const planning = run.status === "planning";
   const general = run.subtasks.some((s) => s.tool && s.tool !== "deals");
   const rounds = new Map<number, SubtaskView[]>();
@@ -203,7 +202,7 @@ function Steps({ run, devices }: { run: RunView; devices: DeviceView[] }) {
             <span className="tgroup__name">{run.stages?.[wave - 1] || (wave === 1 ? (general ? "Do the tasks" : "Collect deals") : "Next step")}</span>
             <ul>
               {subs.map((s) => (
-                <Row key={s.id} state={taskState(s)} name={s.name ?? s.label ?? capabilityLabel(s.capability)} device={deviceName(s.deviceId)} result={result(s)} />
+                <Row key={s.id} state={taskState(s)} name={s.name ?? s.label ?? capabilityLabel(s.capability)} device={s.deviceId ? devices.find((d) => d.id === s.deviceId)?.name ?? s.deviceName ?? "removed device" : null} result={result(s)} />
               ))}
             </ul>
           </li>

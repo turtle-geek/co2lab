@@ -245,6 +245,9 @@ export const SubtaskView = z.object({
   /** When a device started / finished this task (ms), for "time your devices worked". */
   startedAt: z.number().nullable().optional(),
   finishedAt: z.number().nullable().optional(),
+  /** Kind and name of the device that ran it, kept even after that device is removed or re-paired. */
+  deviceKind: DeviceKind.optional(),
+  deviceName: z.string().optional(),
 });
 export type SubtaskView = z.infer<typeof SubtaskView>;
 
