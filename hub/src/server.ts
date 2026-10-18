@@ -1,5 +1,7 @@
 // Co2lab hub entry point: Fastify HTTP + ws WebSocket on one port.
 
+import type { AiUsage, ModelTier } from "@co2lab/shared";
+import { burnFor } from "./burn.js";
 import { createReadStream, existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -130,7 +132,26 @@ app.get("/api/evidence/:file", async (req: FastifyRequest<{ Params: { file: stri
   }
 });
 
-// ---------- Device telemetry history (Devices tab graphs) ----------
+// ---------- AI usage (Lab → Impact): every Gemini call in agent_step, summed ----------
+
+app.get("/api/impact", async (req: FastifyRequest<{ Querystring: { viewer?: string; hours?: string } }>, reply) => {
+  if (!isOwner(req) && !(await hub.viewerTokenValid(req.query.viewer))) return reply.code(401).send({ error: "unauthorized" });
+  const hours = Math.min(24 * 30, Math.max(1, Number(req.query.hours) || 24));
+  const since = Date.now() - hours * 3_600_000;
+  const { requests, groups } = await repo.aiUsage(since);
+  const usage: AiUsage = {
+    since,
+    requests,
+    groups: groups.map((g) => {
+      const tier: ModelTier = g.tier === "lite" || g.tier === "pro" ? g.tier : "flash";
+      const b = burnFor(tier, g.tokensIn, g.tokensOut);
+      return { ...g, tier, gCo2: b.gCo2, energyWh: b.energyWh, costUsd: b.costUsd };
+    }),
+  };
+  return usage;
+});
+
+// ---------- Device telemetry history ----------
 
 app.get(
   "/api/devices/:id/telemetry",

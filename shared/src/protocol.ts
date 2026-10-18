@@ -175,6 +175,27 @@ export const DeviceView = z.object({
 });
 export type DeviceView = z.infer<typeof DeviceView>;
 
+/** Gemini usage since a time, grouped by device, step kind and model tier (GET /api/impact). */
+export interface AiUsageGroup {
+  /** Device whose task the call was for; null = the hub itself (planning, writing the answer). */
+  deviceId: string | null;
+  /** plan | proxy (steering a device) | extract (reading a screen or page) | merge (writing the answer) */
+  kind: string;
+  tier: ModelTier;
+  calls: number;
+  tokensIn: number;
+  tokensOut: number;
+  gCo2: number;
+  energyWh: number;
+  costUsd: number;
+}
+export interface AiUsage {
+  since: number;
+  /** Requests (runs) with at least one Gemini call in the window. */
+  requests: number;
+  groups: AiUsageGroup[];
+}
+
 /** One bucket of a device's stored telemetry (GET /api/devices/:id/telemetry). */
 export interface TelemetryPoint {
   time: number;

@@ -16,6 +16,8 @@ import {
   type RunView,
   type SubtaskView,
   type TelemetryPoint,
+  type AiUsage,
+  type AiUsageGroup,
 } from "@co2lab/shared";
 import type { SocketLike } from "../net/connection";
 import type { Backend } from "../net/backend";
@@ -142,6 +144,45 @@ export class MockHub {
     return [...groups.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([time, ps]) => ({ time, batteryPct: avg(ps.map((p) => p.batteryPct)), tempC: avg(ps.map((p) => p.tempC)), charging: ps.some((p) => p.charging) }));
+  }
+
+  /**
+   * Mock Gemini usage shaped like the hub's agent_step totals: per request one Flash plan, Lite steering
+   * steps on the device, a Flash read of the screen or page, and a Flash answer.
+   */
+  aiUsage(hours: number): AiUsage {
+    const since = Date.now() - hours * 3_600_000;
+    const groups = new Map<string, AiUsageGroup>();
+    const wh = { lite: 0.096, flash: 0.24, pro: 0.96 } as const;
+    const price = { lite: [0.1, 0.4], flash: [0.3, 2.5], pro: [1.25, 10] } as const;
+    const add = (deviceId: string | null, kind: string, tier: "lite" | "flash", calls: number, tin: number, tout: number) => {
+      const key = `${deviceId}|${kind}|${tier}`;
+      const g = groups.get(key) ?? { deviceId, kind, tier, calls: 0, tokensIn: 0, tokensOut: 0, gCo2: 0, energyWh: 0, costUsd: 0 };
+      const e = ((tin + tout) / 1000) * wh[tier];
+      Object.assign(g, {
+        calls: g.calls + calls,
+        tokensIn: g.tokensIn + tin,
+        tokensOut: g.tokensOut + tout,
+        energyWh: g.energyWh + e,
+        gCo2: g.gCo2 + e * 0.125,
+        costUsd: g.costUsd + (tin * price[tier][0] + tout * price[tier][1]) / 1e6,
+      });
+      groups.set(key, g);
+    };
+    let requests = 0;
+    for (const r of this.runs) {
+      if (r.view.createdAt < since) continue;
+      requests += 1;
+      add(null, "plan", "flash", 1, 2600, 420);
+      for (const s of r.subtasks) {
+        if (!s.view.deviceId || s.view.status === "queued") continue;
+        const phone = s.view.deviceId === "dev-a54";
+        add(s.view.deviceId, "proxy", "lite", phone ? 4 : 2, phone ? 7200 : 3100, phone ? 260 : 140);
+        add(s.view.deviceId, "extract", "flash", 1, phone ? 3400 : 2100, 380);
+      }
+      if (r.view.status === "done") add(null, "merge", "flash", 1, 2300, 520);
+    }
+    return { since, requests, groups: [...groups.values()] };
   }
 
   private addDevice(d: DeviceView) {
@@ -681,6 +722,10 @@ export const mockBackend: Backend = {
   },
   async logout() {
     sessionStorage.removeItem(LOGIN_KEY);
+  },
+  async aiUsage(hours) {
+    await new Promise((r) => setTimeout(r, 150));
+    return mockHub.aiUsage(hours);
   },
   async telemetryHistory(deviceId, minutes) {
     await new Promise((r) => setTimeout(r, 150));

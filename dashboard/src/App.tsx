@@ -151,7 +151,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             </button>
           </div>
           {tab === "impact" ? (
-            <ImpactTab runs={state.runs} devices={state.devices} />
+            <ImpactTab load={backend.aiUsage} runs={state.runs} devices={state.devices} />
           ) : tab === "compute" ? (
             <ComputeTab sets={state.computeSets} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
           ) : (

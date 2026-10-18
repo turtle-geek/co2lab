@@ -93,6 +93,8 @@ export interface Repository {
   listDevices(): Promise<DeviceRecord[]>;
 
   appendTelemetry(t: TelemetryRow): Promise<void>;
+  /** Gemini calls since `sinceMs`, summed per device / step kind / model tier, and the requests they served. */
+  aiUsage(sinceMs: number): Promise<{ requests: number; groups: { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number }[] }>;
   /** Stored telemetry since `sinceMs`, averaged into buckets of `bucketMs` (online rows only). */
   telemetryHistory(deviceId: string, sinceMs: number, bucketMs: number): Promise<TelemetryPoint[]>;
   appendStep(s: StepRow): Promise<void>;

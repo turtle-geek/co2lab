@@ -33,6 +33,23 @@ export class MemoryRepository implements Repository {
     this.telemetry.push(t);
     if (this.telemetry.length > MAX_ROWS) this.telemetry.splice(0, this.telemetry.length - MAX_ROWS);
   }
+  async aiUsage(sinceMs: number) {
+    const groups = new Map<string, { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number }>();
+    const runs = new Set<string>();
+    for (const s of this.steps) {
+      if (s.time < sinceMs || s.tokensIn + s.tokensOut <= 0) continue;
+      if (s.runId) runs.add(s.runId);
+      const tier = typeof s.detail.tier === "string" ? s.detail.tier : "flash";
+      const key = `${s.deviceId}|${s.kind}|${tier}`;
+      const g = groups.get(key) ?? { deviceId: s.deviceId, kind: s.kind, tier, calls: 0, tokensIn: 0, tokensOut: 0 };
+      g.calls += 1;
+      g.tokensIn += s.tokensIn;
+      g.tokensOut += s.tokensOut;
+      groups.set(key, g);
+    }
+    return { requests: runs.size, groups: [...groups.values()] };
+  }
+
   async telemetryHistory(deviceId: string, sinceMs: number, bucketMs: number): Promise<TelemetryPoint[]> {
     const buckets = new Map<number, TelemetryRow[]>();
     for (const r of this.telemetry) {
