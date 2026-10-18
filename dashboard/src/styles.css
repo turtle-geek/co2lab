@@ -1671,3 +1671,43 @@ code {
 .screen--done .phone__glass img,
 .screen--done .browser__glass img { filter: saturate(0.5) brightness(1.04); opacity: 0.75; transition: opacity 0.6s ease, filter 0.6s ease; }
 .screen__done { color: var(--green-deep); font-weight: 800; font-size: 0.8rem; }
+
+/* ---------- Agent steps (GitHub-checks style timeline) ---------- */
+.steps { list-style: none; margin: 4px 0 12px; padding: 0; display: grid; gap: 0; }
+.steps--nested { margin: 0; }
+.steps__group { list-style: none; }
+.step { position: relative; display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 7px 0 7px; }
+/* the line joining one step's icon to the next */
+.step::before { content: ""; position: absolute; left: 11px; top: 31px; bottom: -7px; width: 2px; background: var(--line); }
+.steps > .step:last-child::before,
+.steps > .steps__group:last-child > .steps--nested:last-child > .step:last-child::before { display: none; }
+.step__icon { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 0.8rem; font-weight: 900; z-index: 1; transition: background 0.3s ease, color 0.3s ease; }
+.step__icon--done { background: var(--green); color: #fff; animation: pop 0.35s ease both; }
+.step__icon--failed { background: var(--red); color: #fff; }
+.step__icon--waiting { background: var(--card); border: 2px dashed var(--line); }
+.step__icon--skipped { background: var(--gray-pill); color: var(--muted); }
+.step__icon--running { border: 3px solid var(--amber-soft); border-top-color: var(--amber); animation: spin 0.9s linear infinite; background: var(--card); }
+.step__body { min-width: 0; padding-top: 2px; }
+.step__head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.step__title { font-weight: 800; }
+.step--waiting .step__title { color: var(--muted); }
+.step__meta { color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.step__detail { color: var(--ink); font-size: 0.9rem; margin-top: 2px; overflow-wrap: anywhere; }
+.step--failed .step__detail { color: var(--red); }
+.step--waiting .step__detail { color: var(--muted); }
+.step__why { margin-top: 2px; color: var(--muted); }
+.step__why summary { cursor: pointer; color: var(--green-deep); font-weight: 700; font-size: 0.82rem; }
+.step__why[open] { color: var(--ink); line-height: 1.45; }
+.thinking { color: var(--muted); }
+.thinking__dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: dots 1.2s steps(4, end) infinite; }
+@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+@keyframes pop { 0% { transform: scale(0.6); } 70% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .step__icon--running, .step__icon--done, .thinking__dots::after { animation: none; }
+}
+
+/* Example requests (empty Results) */
+.suggest { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.suggest__chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 0.9rem; cursor: pointer; transition: background 0.2s ease, transform 0.15s ease; }
+.suggest__chip:hover:not(:disabled) { background: var(--green-soft); transform: translateY(-1px); }
+.suggest__chip:disabled { opacity: 0.5; cursor: default; }

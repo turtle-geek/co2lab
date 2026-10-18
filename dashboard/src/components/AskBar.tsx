@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { Burn, RunView } from "@co2lab/shared";
-import { fmtInt, fmtUsd } from "../format";
+import { EXAMPLE_PROMPTS, fmtInt, fmtUsd } from "../format";
 
 const EXAMPLE = "Best lunch deals near UTSC today";
 
@@ -16,11 +16,20 @@ export function AskBar({
   onAsk(prompt: string): boolean;
 }) {
   const [text, setText] = useState("");
+  const [focused, setFocused] = useState(false);
+  const [i, setI] = useState(0);
+  // Rotate through real examples while the box is empty and idle; Enter on an empty box runs the one shown.
+  useEffect(() => {
+    if (focused || text) return;
+    const t = setInterval(() => setI((n) => (n + 1) % EXAMPLE_PROMPTS.length), 4_000);
+    return () => clearInterval(t);
+  }, [focused, text]);
   if (readOnly) return null;
+  const example = EXAMPLE_PROMPTS[i] ?? EXAMPLE;
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const prompt = (text.trim() || EXAMPLE).slice(0, 500);
+    const prompt = (text.trim() || example).slice(0, 500);
     if (onAsk(prompt)) setText("");
   }
 
@@ -31,8 +40,10 @@ export function AskBar({
         value={text}
         maxLength={500}
         onChange={(e) => setText(e.target.value)}
-        placeholder={EXAMPLE}
-        aria-label="What should the devices look for?"
+        placeholder={example}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        aria-label="Ask your devices"
         enterKeyHint="go"
       />
       <button className="btn btn--primary ask__go" disabled={!connected || busy}>

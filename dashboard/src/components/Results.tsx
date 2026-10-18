@@ -1,37 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { ApprovalView, DeviceView, RankedDeal, RunView, SubtaskView } from "@co2lab/shared";
-import { SOURCE_LABEL, capabilityLabel, useNow } from "../format";
+import { EXAMPLE_PROMPTS, SOURCE_LABEL, capabilityLabel, useNow } from "../format";
 
-const SUB_STATUS: Record<SubtaskView["status"], string> = {
-  queued: "Queued",
-  running: "Running",
-  done: "Done",
-  failed: "Failed",
-  cancelled: "Cancelled",
-};
-
-function SubtaskRow({ s, deviceName }: { s: SubtaskView; deviceName: (id: string | null) => string | null }) {
-  const dev = deviceName(s.deviceId);
-  let detail: string;
-  if (s.status === "failed") detail = `failed: ${s.error ?? "no reason given"}`;
-  else if (s.status === "done" && s.findings !== undefined && s.findings !== null) detail = s.findings;
-  else if (s.status === "done") detail = s.dealCount === 0 ? "no deals found" : `${s.dealCount} deal${s.dealCount === 1 ? "" : "s"}`;
-  else if (s.status === "running") detail = dev ? `on ${dev}` : "running";
-  else if (s.status === "cancelled") detail = s.error ?? "cancelled";
-  else detail = s.attempt > 1 ? "waiting for another device" : "waiting for a device";
-
-  return (
-    <li className={`subtask subtask--${s.status}`}>
-      <span className="subtask__name">{s.label ?? capabilityLabel(s.capability)}</span>
-      <span className={`pill pill--sub-${s.status}`}>{SUB_STATUS[s.status]}</span>
-      <span className="subtask__detail">
-        {detail}
-        {s.attempt > 1 && <span className="subtask__attempt"> · attempt {s.attempt}</span>}
-        {s.status === "done" && dev && <span className="subtask__dev"> · {dev}</span>}
-      </span>
-    </li>
-  );
-}
 
 /** "[Wendy's] $4.99 value combo" -> store "Wendy's", title "$4.99 value combo". */
 function splitStore(title: string): { store: string | null; title: string } {
@@ -114,29 +84,135 @@ function DealCard({ d, deviceName }: { d: RankedDeal; deviceName: (id: string | 
   );
 }
 
-function PlanningState({ since }: { since: number }) {
-  const now = useNow();
+type StepState = "done" | "running" | "waiting" | "failed" | "skipped";
+
+function StepIcon({ state }: { state: StepState }) {
+  if (state === "running") return <span className="step__icon step__icon--running" aria-label="running" />;
+  const glyph = { done: "✓", waiting: "", failed: "✕", skipped: "–" }[state];
   return (
-    <div className="planning" role="status">
-      <span className="spinner" aria-hidden />
-      <div>
-        <b>Planning with Gemini…</b> <span className="planning__secs">{Math.max(0, Math.round((now - since) / 1000))} s</span>
-        <p>Checking which devices are online and what each one has (apps, games, browser), then choosing the tasks.</p>
-      </div>
-    </div>
+    <span className={`step__icon step__icon--${state}`} aria-label={state}>
+      {glyph}
+    </span>
   );
 }
 
-function PlanBox({ plan }: { plan: string }) {
+function Step(props: { state: StepState; title: ReactNode; detail?: ReactNode; meta?: ReactNode; children?: ReactNode }) {
   return (
-    <details className="planbox" open>
-      <summary>Why this plan</summary>
-      {plan.split(/\n\n+/).map((p, i) => (
-        <p key={i}>{p}</p>
-      ))}
-    </details>
+    <li className={`step step--${props.state}`}>
+      <StepIcon state={props.state} />
+      <div className="step__body">
+        <div className="step__head">
+          <span className="step__title">{props.title}</span>
+          {props.meta && <span className="step__meta">{props.meta}</span>}
+        </div>
+        {props.detail && <div className="step__detail">{props.detail}</div>}
+        {props.children}
+      </div>
+    </li>
   );
 }
+
+const secs = (from: number | null | undefined, to: number) => (from ? `${Math.max(0, Math.round((to - from) / 1000))} s` : "");
+
+/**
+ * What the agents decided and what has run, in order (like CI checks): plan -> tasks per round -> answer.
+ * Every row has one clear state, so waiting for Gemini never looks like nothing is happening.
+ */
+function Steps({ run, deviceName }: { run: RunView; deviceName: (id: string | null) => string | null }) {
+  const now = useNow();
+  const planning = run.status === "planning";
+  const general = run.subtasks.some((s) => /^(Web: |App: |Review analysis)/.test(s.label ?? ""));
+  const rounds = new Map<number, SubtaskView[]>();
+  for (const s of run.subtasks) rounds.set(s.wave ?? 1, [...(rounds.get(s.wave ?? 1) ?? []), s]);
+  const plans = (run.plan ?? "").split(/\n\n+/).filter(Boolean);
+  const active = run.status === "running" || run.status === "planning" || run.status === "merging";
+  const thinkingAgain = run.status === "running" && general && run.subtasks.every((s) => s.status !== "queued" && s.status !== "running");
+
+  const taskRow = (s: SubtaskView) => {
+    const dev = deviceName(s.deviceId);
+    const state: StepState =
+      s.status === "done" ? "done" : s.status === "failed" ? "failed" : s.status === "running" ? "running" : s.status === "cancelled" ? "skipped" : "waiting";
+    let detail: string;
+    if (s.status === "failed") detail = s.error ?? "failed";
+    else if (s.status === "done") detail = s.findings ?? (s.dealCount === 0 ? "nothing found" : `${s.dealCount} ${general ? "item" : "deal"}${s.dealCount === 1 ? "" : "s"} found`);
+    else if (s.status === "running") detail = dev ? `working on ${dev}` : "working";
+    else if (s.status === "cancelled") detail = s.error ?? "cancelled";
+    else detail = s.attempt > 1 ? "waiting for another device" : "waiting for a free device";
+    return (
+      <Step
+        key={s.id}
+        state={state}
+        title={s.label ?? capabilityLabel(s.capability)}
+        meta={[dev && s.status !== "running" ? dev : null, s.attempt > 1 ? `attempt ${s.attempt}` : null].filter(Boolean).join(" · ") || undefined}
+        detail={detail}
+      />
+    );
+  };
+
+  return (
+    <ol className="steps" aria-label="What the agents are doing">
+      <Step
+        state={planning ? "running" : run.subtasks.length || run.plan ? "done" : run.status === "failed" ? "failed" : "done"}
+        title={planning ? "Planning with Gemini" : "Plan"}
+        meta={planning ? secs(run.createdAt, now) : `${run.subtasks.filter((s) => (s.wave ?? 1) === 1).length} task(s)`}
+        detail={
+          planning ? (
+            <span className="thinking">
+              Reading your request and what each device has (apps, games, browser)<span className="thinking__dots" aria-hidden />
+            </span>
+          ) : plans[0] ? (
+            <details className="step__why">
+              <summary>Why</summary>
+              {plans[0]}
+            </details>
+          ) : null
+        }
+      />
+      {[...rounds.entries()].map(([wave, subs]) => (
+        <li key={`w${wave}`} className="steps__group">
+          {wave > 1 && (
+            <ol className="steps steps--nested">
+              <Step
+                state="done"
+                title={`Follow-up ${wave - 1}`}
+                detail={
+                  plans[wave - 1] ? (
+                    <details className="step__why">
+                      <summary>Why</summary>
+                      {plans[wave - 1]!.replace(/^Follow-up:\s*/, "")}
+                    </details>
+                  ) : null
+                }
+              />
+            </ol>
+          )}
+          <ol className="steps steps--nested">{subs.map(taskRow)}</ol>
+        </li>
+      ))}
+      {thinkingAgain && (
+        <Step
+          state="running"
+          title="Checking what is still missing"
+          detail={
+            <span className="thinking">
+              Gemini is reading the findings and deciding the next step<span className="thinking__dots" aria-hidden />
+            </span>
+          }
+        />
+      )}
+      {(run.subtasks.length > 0 || run.status === "done" || run.status === "merging") && (
+        <Step
+          state={run.status === "merging" ? "running" : run.status === "done" ? "done" : run.status === "failed" ? "failed" : "waiting"}
+          title={general ? "Write the answer" : "Rank the deals"}
+          meta={run.status === "done" && run.finishedAt ? `total ${secs(run.createdAt, run.finishedAt)}` : active ? undefined : undefined}
+          detail={run.status === "failed" ? run.error ?? "no task finished" : run.status === "merging" ? <span className="thinking">Combining what the devices found<span className="thinking__dots" aria-hidden /></span> : undefined}
+        />
+      )}
+    </ol>
+  );
+}
+
+
 
 export function Approvals({
   approvals,
@@ -214,6 +290,7 @@ export function Results({
   connected,
   onShare,
   children,
+  onAsk,
 }: {
   children?: ReactNode;
   run: RunView | null;
@@ -221,6 +298,7 @@ export function Results({
   readOnly: boolean;
   connected: boolean;
   onShare(runId: string, target: string): void;
+  onAsk?(prompt: string): boolean;
 }) {
   const deviceName = (id: string | null) => (id ? devices.find((d) => d.id === id)?.name ?? "a removed device" : null);
 
@@ -228,30 +306,32 @@ export function Results({
     return (
       <section className="panel results" aria-label="Results">
         <h2 className="panel__title">Results</h2>
-        <p className="empty">{readOnly ? "No run yet. Results show up here live." : "Ask for deals above to start a run."}</p>
+        {readOnly ? (
+          <p className="empty">No run yet. Results show up here live.</p>
+        ) : (
+          <>
+            <p className="empty">Ask your devices for something. A few things they can do:</p>
+            <div className="suggest">
+              {EXAMPLE_PROMPTS.map((p) => (
+                <button key={p} className="suggest__chip" disabled={!connected} onClick={() => onAsk?.(p)}>
+                  {p}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         {children}
       </section>
     );
   }
 
-  const failed = run.subtasks.filter((s) => s.status === "failed");
   return (
     <section className="panel results" aria-label="Results">
       <h2 className="panel__title">
         Results <span className="results__prompt">“{run.prompt}”</span>
       </h2>
 
-      {run.status === "planning" && <PlanningState since={run.createdAt} />}
-      {run.plan && <PlanBox plan={run.plan} />}
-      {run.subtasks.length > 0 && (
-        <ul className="subtasks" aria-label="Subtasks">
-          {run.subtasks.map((s) => (
-            <SubtaskRow key={s.id} s={s} deviceName={deviceName} />
-          ))}
-        </ul>
-      )}
-
-      {run.status === "merging" && <p className="results__state">{run.subtasks.some((s) => /^(Web: |Review analysis)/.test(s.label ?? "")) ? "Writing the answer…" : "Merging and ranking deals…"}</p>}
+      <Steps run={run} deviceName={deviceName} />
       {run.answer && (
         <div className="answer">
           <p className="answer__text">{run.answer.text}</p>
@@ -276,16 +356,7 @@ export function Results({
       )}
       {run.status === "failed" && (
         <div className="results__failed">
-          <b>Run failed.</b> {run.error ?? "No subtask finished."}
-          {failed.length > 0 && (
-            <ul>
-              {failed.map((s) => (
-                <li key={s.id}>
-                  {capabilityLabel(s.capability)}: {s.error ?? "no reason given"}
-                </li>
-              ))}
-            </ul>
-          )}
+          <b>Run failed.</b> {run.error ?? "No task finished."}
         </div>
       )}
 

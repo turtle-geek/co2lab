@@ -149,6 +149,23 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             <BurnMeter run={run} />
           </div>
 
+          {/* The run comes first: what the agents decided, what has run, and the answer, without scrolling. */}
+          <Results
+            run={run}
+            devices={state.devices}
+            readOnly={readOnly}
+            connected={connected}
+            onShare={(runId, target) => hub.send({ type: "share.request", runId, target })}
+            onAsk={hub.createRun}
+          >
+            <Approvals
+              approvals={state.approvals}
+              readOnly={readOnly}
+              connected={connected}
+              onRespond={(id, approve) => hub.send({ type: "approval.respond", approvalId: id, approve })}
+            />
+          </Results>
+
           <DeviceGrid
             devices={state.devices}
             readOnly={readOnly}
@@ -158,24 +175,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             frames={state.frames}
           />
 
-
-          <div className={state.devices.some((d) => d.state === "working" || d.currentTask) || (run && (run.finishedAt === null || Date.now() - run.finishedAt < 60_000) && run.subtasks.some((s) => s.deviceId && state.frames[s.deviceId])) ? "split" : "split split--solo"}>
-            <LiveScreens devices={state.devices} frames={state.frames} steps={state.steps} run={run} />
-            <Results
-              run={run}
-              devices={state.devices}
-              readOnly={readOnly}
-              connected={connected}
-              onShare={(runId, target) => hub.send({ type: "share.request", runId, target })}
-            >
-              <Approvals
-                approvals={state.approvals}
-                readOnly={readOnly}
-                connected={connected}
-                onRespond={(id, approve) => hub.send({ type: "approval.respond", approvalId: id, approve })}
-              />
-            </Results>
-          </div>
+          <LiveScreens devices={state.devices} frames={state.frames} steps={state.steps} run={run} />
         </main>
       )}
 

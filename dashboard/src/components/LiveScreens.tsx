@@ -68,12 +68,11 @@ export function LiveScreens({
   const isWorking = (d: DeviceView) => d.state === "working" || !!d.currentTask;
   // Device order is the grid's order, so slots never swap places.
   const shown = devices.filter((d) => isWorking(d) || (runRecent && inRun.has(d.id) && frames[d.id]));
+  if (shown.length === 0) return null;
   return (
     <section className="panel live" aria-label="Live screens">
       <h2 className="panel__title">Live screens</h2>
-      {shown.length === 0 ? (
-        <p className="empty">Screens show up here while a device is working.</p>
-      ) : (
+      {(
         <div className="live__grid">
           {shown.map((d) => (
             <Screen key={d.id} device={d} frame={frames[d.id]} step={steps[d.id]} now={now} done={!isWorking(d)} />

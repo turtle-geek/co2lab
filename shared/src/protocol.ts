@@ -189,6 +189,8 @@ export const SubtaskView = z.object({
   findings: z.string().nullable().optional(),
   /** Display name, e.g. "Tim Hortons" or "Web: store.steampowered.com". */
   label: z.string().optional(),
+  /** General agent: planning round that created this task (1 = first plan, 2+ = follow-ups). */
+  wave: z.number().int().optional(),
 });
 export type SubtaskView = z.infer<typeof SubtaskView>;
 

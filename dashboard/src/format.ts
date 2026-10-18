@@ -62,3 +62,11 @@ export function useNow(ms = 1000): number {
   }, [ms]);
   return now;
 }
+
+/** Requests the device team can really handle today (rotated in the ask bar, offered as chips). */
+export const EXAMPLE_PROMPTS = [
+  "Best lunch deals near UTSC today",
+  "Based on my Steam library, recommend games and filter out fake or troll reviews",
+  "Find me a co-op game on Steam under $20 that isn't grindy",
+  "Cheapest coffee deal right now",
+];

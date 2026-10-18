@@ -122,6 +122,8 @@ export class RunManager {
   private general = new Map<string, GeneralTask>();
   /** The agent planner's reasoning per run, shown on the dashboard. */
   private plans = new Map<string, string>();
+  /** Planning round per subtask (shown as groups on the dashboard). */
+  private waves = new Map<string, number>();
   /** Runs planned by the general agent (not deal-only); wave 2 = follow-up already planned. */
   /** Runs planned by the general agent (not deal-only); wave counts the planning rounds so far (max MAX_WAVES). */
   private agentRuns = new Map<string, { wave: number }>();
@@ -162,6 +164,7 @@ export class RunManager {
         dealCount: s.dealCount,
         findings: this.general.get(s.id)?.summary ?? null,
         label: s.label,
+        wave: this.waves.get(s.id) ?? 1,
       })),
       ranked: r.ranked,
       answer: r.answer ?? null,
@@ -371,6 +374,7 @@ export class RunManager {
       };
       const g: GeneralTask = { tool: t.tool === "deals" ? "web" : t.tool, startUrl: validUrl(t.startUrl), setIds: [], findings: null, summary: null };
       this.subtasks.set(s.id, s);
+      this.waves.set(s.id, this.agentRuns.get(run.id)?.wave ?? 1);
       this.byRun.get(run.id)!.push(s.id);
       this.general.set(s.id, g);
       if (scheduled) this.queuedAt.set(s.id, now);
@@ -486,6 +490,7 @@ export class RunManager {
         finishedAt: null,
       };
       this.subtasks.set(s.id, s);
+      this.waves.set(s.id, this.agentRuns.get(run.id)?.wave ?? 1);
       this.byRun.get(run.id)!.push(s.id);
       this.queuedAt.set(s.id, now);
       if (!this.deps.devices.anyWith(s.capability)) {
