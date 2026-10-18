@@ -1876,6 +1876,6 @@ code {
 .battery--mid .battery__fill { fill: var(--amber); }
 .battery--low .battery__fill { fill: var(--red); }
 /* charging: the fill goes pale and a solid dark bolt sits on top (dark on light reads at 17 px) */
-.battery--charging .battery__fill { fill: #92c776; }
+.battery--charging .battery__fill { fill: #bfe0a8; }
 .battery__bolt { fill: #4a3020; }
 .thermo__fill { fill: var(--red); }
