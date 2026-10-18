@@ -9,6 +9,9 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.InputType
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -28,6 +31,7 @@ class MainActivity : Activity() {
 
     private val store by lazy { Store(this) }
     private lateinit var status: TextView
+    private lateinit var statusPill: TextView
     private lateinit var checklist: TextView
     private lateinit var pairBox: LinearLayout
     private lateinit var pairedBox: LinearLayout
@@ -44,18 +48,55 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = Ui.PAGE
+        window.navigationBarColor = Ui.PAGE
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad * 2, pad, pad * 2)
         }
-        column.addView(TextView(this).apply { text = "CO₂LAB agent"; textSize = 26f })
+        // ----- Brand header (same look as the dashboard) -----
+        column.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = "●"
+                textSize = 26f
+                setTextColor(Ui.GREEN)
+                setPadding(0, 0, pad / 2, 0)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "CO₂LAB"
+                textSize = 26f
+                typeface = Ui.bold
+                setTextColor(Ui.INK)
+                letterSpacing = 0.02f
+            })
+        })
         column.addView(TextView(this).apply {
-            text = "This phone opens your deal apps and reports the offers to your hub."
+            text = "This old phone is part of your agent team: it opens your apps and reports to your hub."
             textSize = 14f
+            setTextColor(Ui.MUTED)
+            setPadding(0, pad / 4, 0, pad)
         })
 
-        status = TextView(this).apply { textSize = 15f; setPadding(0, pad, 0, pad); setTextIsSelectable(true) }
-        column.addView(status)
+        // ----- Live status card -----
+        val statusCard = card(column)
+        statusPill = TextView(this).apply {
+            textSize = 13f
+            typeface = Ui.bold
+            setPadding(pad * 3 / 4, pad / 4, pad * 3 / 4, pad / 4)
+        }
+        statusCard.addView(statusPill, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        status = TextView(this).apply {
+            textSize = 15f
+            setTextColor(Ui.INK)
+            setLineSpacing(0f, 1.2f)
+            setPadding(0, pad / 2, 0, 0)
+            setTextIsSelectable(true)
+        }
+        statusCard.addView(status)
 
         // ----- Pairing (not paired yet) -----
         pairBox = section(column, "Pair with your hub")
@@ -68,17 +109,17 @@ class MainActivity : Activity() {
         nameInput = field("Device name", InputType.TYPE_CLASS_TEXT)
         nameInput.setText(store.deviceName)
         pairBox.addView(nameInput, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        pairButton = button("Pair") { pair() }
+        pairBox.addView(button("Scan pairing QR", primary = true) { scanQr() })
+        pairButton = button("Pair with code") { pair() }
         pairBox.addView(pairButton)
-        pairBox.addView(button("Scan pairing QR") { scanQr() })
-        pairMessage = TextView(this).apply { textSize = 14f }
+        pairMessage = TextView(this).apply { textSize = 14f; setTextColor(Ui.MUTED); setPadding(0, pad / 2, 0, 0) }
         pairBox.addView(pairMessage)
 
         // ----- Paired -----
         pairedBox = section(column, "Hub")
-        pairedLabel = TextView(this).apply { textSize = 15f }
+        pairedLabel = TextView(this).apply { textSize = 15f; setTextColor(Ui.INK); setLineSpacing(0f, 1.2f); setPadding(0, 0, 0, pad / 2) }
         pairedBox.addView(pairedLabel)
-        pairedBox.addView(button("Reconnect now") { AgentService.start(this) })
+        pairedBox.addView(button("Reconnect now", primary = true) { AgentService.start(this) })
         pairedBox.addView(button("Scan a new pairing QR") { scanQr() })
         pairedBox.addView(button("Pair again (forget this hub)") {
             AgentService.stop(this)
@@ -89,7 +130,7 @@ class MainActivity : Activity() {
 
         // ----- Checklist -----
         val setup = section(column, "Setup checklist")
-        checklist = TextView(this).apply { textSize = 15f }
+        checklist = TextView(this).apply { textSize = 15f; setTextColor(Ui.INK); setLineSpacing(0f, 1.35f); setPadding(0, 0, 0, pad / 2) }
         setup.addView(checklist)
         setup.addView(button("Turn on accessibility for Co2lab") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -116,7 +157,7 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, on -> store.probeEnabled = on }
         })
 
-        setContentView(ScrollView(this).apply { addView(column) })
+        setContentView(ScrollView(this).apply { setBackgroundColor(Ui.PAGE); addView(column) })
 
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
@@ -250,11 +291,21 @@ class MainActivity : Activity() {
 
         val pm = getSystemService(PowerManager::class.java)
         val bg = pm.isIgnoringBatteryOptimizations(packageName)
+        val (pillText, pillBg, pillFg) = when {
+            !paired -> Triple("Not paired", Ui.GRAY_PILL, Ui.INK)
+            s.authFailed -> Triple("Rejected by the hub", Ui.RED_SOFT, Ui.RED)
+            s.task != null -> Triple("Working", Ui.AMBER_SOFT, Ui.INK)
+            s.connected -> Triple("Connected", Ui.GREEN_PILL, Ui.GREEN_DEEP)
+            else -> Triple("Reconnecting…", Ui.AMBER_SOFT, Ui.INK)
+        }
+        statusPill.text = pillText
+        statusPill.setTextColor(pillFg)
+        statusPill.background = Ui.rounded(pillBg, 999f * resources.displayMetrics.density)
         status.text = buildString {
-            appendLine("Hub connection: ${if (paired) s.connection else "not paired"}")
-            if (s.authFailed) appendLine("⚠ The hub no longer accepts this phone. Tap Pair again.")
-            appendLine("Accessibility: ${if (s.accessibility) "ON" else "OFF"}")
-            appendLine("Current task: ${s.task ?: "none"}")
+            appendLine(if (paired) s.connection else "Pair this phone with your hub below.")
+            if (s.authFailed) appendLine("The hub no longer accepts this phone. Tap Pair again.")
+            appendLine("Accessibility: ${if (s.accessibility) "on" else "off"}")
+            appendLine("Task: ${s.task ?: "waiting for work"}")
             if (s.lastMessage.isNotBlank()) append("Last: ${s.lastMessage}")
         }
 
@@ -268,22 +319,88 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun mark(ok: Boolean) = if (ok) "✅" else "⬜"
+    private fun mark(ok: Boolean) = if (ok) "✓" else "○"
 
-    private fun section(parent: LinearLayout, title: String): LinearLayout {
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, pad, 0, 0) }
-        box.addView(TextView(this).apply { text = title; textSize = 19f; setPadding(0, 0, 0, pad / 2) })
-        parent.addView(box, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+    // ---------- Dashboard-style building blocks (colors match dashboard/src/styles.css) ----------
+
+    private val dp get() = resources.displayMetrics.density
+
+    /** A cream rounded card, like the dashboard panels. */
+    private fun card(parent: LinearLayout): LinearLayout {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+            background = Ui.rounded(Ui.CARD, 20 * dp, stroke = Ui.CARD_EDGE, strokeWidth = (1 * dp).toInt())
+            elevation = 2 * dp
+        }
+        parent.addView(box, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { setMargins(0, 0, 0, pad * 3 / 4) })
         return box
     }
 
-    private fun hint(text: String) = TextView(this).apply { this.text = text; textSize = 13f; setPadding(0, pad / 2, 0, pad / 2) }
+    private fun section(parent: LinearLayout, title: String): LinearLayout {
+        val box = card(parent)
+        box.addView(TextView(this).apply {
+            text = title
+            textSize = 18f
+            typeface = Ui.bold
+            setTextColor(Ui.INK)
+            setPadding(0, 0, 0, pad / 2)
+        })
+        return box
+    }
 
-    private fun field(hint: String, type: Int) = EditText(this).apply { this.hint = hint; inputType = type }
+    private fun hint(text: String) = TextView(this).apply {
+        this.text = text
+        textSize = 13f
+        setTextColor(Ui.MUTED)
+        setPadding(0, pad / 2, 0, pad / 2)
+    }
 
-    private fun button(label: String, onClick: () -> Unit) = Button(this).apply {
+    private fun field(hint: String, type: Int) = EditText(this).apply {
+        this.hint = hint
+        inputType = type
+        setTextColor(Ui.INK)
+        setHintTextColor(Ui.MUTED)
+        background = Ui.rounded(0xFFFFFFFF.toInt(), 12 * dp, stroke = Ui.LINE, strokeWidth = (1 * dp).toInt())
+        setPadding(pad * 3 / 4, pad * 3 / 4, pad * 3 / 4, pad * 3 / 4)
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { setMargins(0, pad / 4, 0, pad / 4) }
+    }
+
+    private fun button(label: String, primary: Boolean = false, onClick: () -> Unit) = Button(this).apply {
         text = label
         isAllCaps = false
+        textSize = 15f
+        typeface = Ui.bold
+        stateListAnimator = null
+        setTextColor(if (primary) 0xFFFFFFFF.toInt() else Ui.INK)
+        background = Ui.rounded(if (primary) Ui.GREEN else Ui.GREEN_SOFT, 999 * dp)
+        setPadding(pad, pad * 3 / 4, pad, pad * 3 / 4)
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { setMargins(0, pad / 4, 0, pad / 4) }
         setOnClickListener { onClick() }
+    }
+}
+
+/** Dashboard design tokens (dashboard/src/styles.css :root). */
+private object Ui {
+    const val PAGE = 0xFFDFE6EC.toInt()
+    const val CARD = 0xFFF8F2E6.toInt()
+    const val CARD_EDGE = 0xFFECE3D2.toInt()
+    const val INK = 0xFF26301F.toInt()
+    const val MUTED = 0xFF8B918A.toInt()
+    const val LINE = 0xFFE2D9C7.toInt()
+    const val GREEN = 0xFF5C9F4C.toInt()
+    const val GREEN_DEEP = 0xFF3F7A33.toInt()
+    const val GREEN_SOFT = 0xFFDDE9CF.toInt()
+    const val GREEN_PILL = 0xFFCFE6C2.toInt()
+    const val AMBER_SOFT = 0xFFF6E3C0.toInt()
+    const val RED = 0xFFC8553D.toInt()
+    const val RED_SOFT = 0xFFF6D8CF.toInt()
+    const val GRAY_PILL = 0xFFE2E2DC.toInt()
+    val bold: Typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+
+    fun rounded(color: Int, radius: Float, stroke: Int? = null, strokeWidth: Int = 0) = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = radius
+        if (stroke != null) setStroke(strokeWidth, stroke)
     }
 }
