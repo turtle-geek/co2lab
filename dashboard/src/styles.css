@@ -1885,7 +1885,8 @@ code {
 .burn-wrap > .burn { flex: 1 1 auto; font: inherit; color: inherit; text-align: left; cursor: pointer; }
 .burn-wrap > .burn:hover { box-shadow: 0 0 0 2px var(--line) inset; }
 .burn-wrap > .burn:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
-.burn__info-icon { display: grid; place-items: center; color: var(--muted); margin-left: -4px; }
+.burn__info-icon { display: grid; place-items: center; color: var(--muted); margin-left: 4px; }
+.burn-info dd b { white-space: nowrap; }
 .burn-wrap > .burn[aria-expanded="true"] .burn__info-icon, .burn-wrap > .burn:hover .burn__info-icon { color: var(--green-deep); }
 .burn-info {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
