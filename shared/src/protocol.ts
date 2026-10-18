@@ -201,7 +201,7 @@ export const SubtaskView = z.object({
 });
 export type SubtaskView = z.infer<typeof SubtaskView>;
 
-export const RunStatus = z.enum(["planning", "running", "merging", "done", "failed"]);
+export const RunStatus = z.enum(["planning", "running", "merging", "done", "failed", "cancelled"]);
 export const RunView = z.object({
   id: z.string(),
   clientRunId: z.string(),
@@ -562,6 +562,8 @@ export type HubToDevice = z.infer<typeof HubToDevice>;
 export const ClientToHub = z.discriminatedUnion("type", [
   Hello,
   z.object({ type: z.literal("run.create"), clientRunId: z.string().min(1), prompt: z.string().min(1).max(500) }),
+  /** Stop a run: its device tasks are cancelled and nothing more is planned or written. */
+  z.object({ type: z.literal("run.cancel"), runId: z.string() }),
   z.object({ type: z.literal("pair.start") }),
   /** Approve a pending device-code request (see `POST /api/device-code`). `name` renames the device. */
   z.object({ type: z.literal("devicecode.approve"), userCode: z.string(), name: z.string().trim().min(1).max(60).optional() }),

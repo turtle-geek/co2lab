@@ -376,6 +376,9 @@ export class Hub {
         this.sendRaw(ws, { type: "run.update", run });
         return;
       }
+      case "run.cancel":
+        this.runs.cancel(msg.runId);
+        return;
       case "pair.start": {
         const { code, expiresAt } = this.pairing.create();
         this.sendRaw(ws, { type: "pair.code", code, qrPayload: pairingQrPayload(config.publicUrl, code), expiresAt });

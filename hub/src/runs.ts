@@ -296,6 +296,7 @@ export class RunManager {
       log.warn(`run ${run.id}: agent planner failed (${errMsg(e)}); using the deal planner`);
       return this.planDeals(run);
     }
+    if (ended(run)) return;
     const { deals, general, dropped } = this.validate(plan.tasks);
     this.saveStep({
       time: Date.now(),
@@ -443,6 +444,7 @@ export class RunManager {
       chosen = PLAN_IDS.map((id) => ({ id, goal: PLAN_INFO[id].goal }));
       planNote = `fallback (${why})`;
     }
+    if (ended(run)) return;
     this.saveStep({
       time: Date.now(),
       runId: run.id,
@@ -863,6 +865,7 @@ export class RunManager {
   private async finishAgent(run: RunRecord) {
     const state = this.agentRuns.get(run.id)!;
     const sections = await this.sections(run);
+    if (ended(run)) return;
     if (state.wave < MAX_WAVES && this.deps.catalog) {
       state.wave += 1;
       try {
@@ -872,6 +875,7 @@ export class RunManager {
           findings: sections.map((s, i) => `[${i}] ${s.source}:\n${s.text}`).join("\n\n").slice(0, 20_000),
           onUsage: this.usageSink(run.id, null, "plan"),
         });
+        if (ended(run)) return;
         const { deals, general } = this.validate(plan.tasks);
         if (deals.length || general.length) {
           log.info(`run ${run.id} follow-up: ${plan.reasoning.slice(0, 200)}`);
@@ -889,10 +893,13 @@ export class RunManager {
         log.warn(`run ${run.id}: follow-up planner failed (${errMsg(e)}); answering with what was found`);
       }
     }
+    if (ended(run)) return;
     run.status = "merging";
     this.saveRun(run);
     this.publish(run.id);
-    run.answer = await composeAnswer({ prompt: run.prompt, sections, onUsage: this.usageSink(run.id, null, "merge") });
+    const answer = await composeAnswer({ prompt: run.prompt, sections, onUsage: this.usageSink(run.id, null, "merge") });
+    if (ended(run)) return;
+    run.answer = answer;
     run.status = "done";
     run.finishedAt = Date.now();
     this.saveRun(run);
@@ -905,10 +912,12 @@ export class RunManager {
     this.saveRun(run);
     this.publish(run.id);
     const deals = await this.deps.repo.listDeals(run.id);
+    if (ended(run)) return;
     let ranked: RankedDeal[] = [];
     if (deals.length > 0) {
       try {
         const out = await rankDeals(run.prompt, deals, this.usageSink(run.id, null, "merge"));
+        if (ended(run)) return;
         const used = new Set<number>();
         ranked = out.ranked
           .filter((r) => r.index < deals.length && !used.has(r.index) && used.add(r.index))
@@ -941,8 +950,23 @@ export class RunManager {
     this.publish(run.id);
   }
 
-  private failRun(run: RunRecord, error: string) {
-    if (run.status === "done" || run.status === "failed") return;
+  /** The owner stopped this run: device tasks and review jobs are cancelled, nothing more is planned or written. */
+  cancel(runId: string) {
+    const run = this.runs.get(runId);
+    if (!run || ended(run)) return;
+    for (const s of this.subtasksOf(runId)) {
+      const g = this.general.get(s.id);
+      if (g?.tool !== "reviews" || (s.status !== "queued" && s.status !== "running")) continue;
+      for (const sid of g.setIds) {
+        const v = this.deps.compute?.().get(sid);
+        if (v && (v.status === "running" || v.status === "fetching")) this.deps.compute!().cancel(sid);
+      }
+    }
+    this.failRun(run, "Cancelled", "cancelled");
+  }
+
+  private failRun(run: RunRecord, error: string, status: "failed" | "cancelled" = "failed") {
+    if (ended(run)) return;
     for (const s of this.subtasksOf(run.id)) {
       if (s.status === "queued" || s.status === "running") {
         const d = s.deviceId ? this.deps.devices.get(s.deviceId) : undefined;
@@ -953,14 +977,19 @@ export class RunManager {
         this.saveSubtask(s);
       }
     }
-    run.status = "failed";
+    run.status = status;
     run.error = error;
     run.finishedAt = Date.now();
     this.saveRun(run);
-    log.info(`run ${run.id} failed: ${error}`);
+    log.info(`run ${run.id} ${status}: ${error}`);
     this.publish(run.id);
   }
 
+}
+
+/** Done, failed or cancelled: async steps still in flight must not touch it any more. */
+function ended(run: RunRecord): boolean {
+  return run.status === "done" || run.status === "failed" || run.status === "cancelled";
 }
 
 function errMsg(e: unknown): string {

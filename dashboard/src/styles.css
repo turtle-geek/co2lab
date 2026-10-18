@@ -991,6 +991,10 @@ code {
   background: var(--red-soft);
   color: var(--red);
 }
+.burn__status--cancelled {
+  background: var(--gray-pill);
+  color: var(--ink-2, var(--ink));
+}
 .burn__stat b {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -1147,6 +1151,13 @@ code {
 .results__failed {
   background: var(--red-soft);
   color: #7d2c1c;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  margin: 10px 0;
+}
+.results__cancelled {
+  background: var(--gray-pill);
+  color: var(--ink);
   padding: 12px 14px;
   border-radius: var(--radius-sm);
   margin: 10px 0;

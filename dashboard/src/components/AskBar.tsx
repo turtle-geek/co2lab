@@ -9,11 +9,14 @@ export function AskBar({
   connected,
   busy,
   onAsk,
+  onCancel,
 }: {
   readOnly: boolean;
   connected: boolean;
   busy: boolean;
   onAsk(prompt: string): boolean;
+  /** Set while a run is going: shows Cancel next to Ask. */
+  onCancel?: () => void;
 }) {
   const [text, setText] = useState("");
   if (readOnly) return null;
@@ -39,6 +42,11 @@ export function AskBar({
       <button className="btn btn--primary ask__go" disabled={!connected || busy}>
         {busy ? "Sending…" : "Ask"}
       </button>
+      {onCancel && (
+        <button type="button" className="btn ask__cancel" disabled={!connected} onClick={onCancel}>
+          Cancel
+        </button>
+      )}
     </form>
   );
 }
@@ -49,6 +57,7 @@ const STATUS_TEXT: Record<RunView["status"], string> = {
   merging: "Merging",
   done: "Done",
   failed: "Failed",
+  cancelled: "Cancelled",
 };
 
 /** Time each device spent on this request's tasks: work done on reused hardware instead of new machines. */

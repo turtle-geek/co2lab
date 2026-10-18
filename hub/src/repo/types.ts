@@ -24,7 +24,7 @@ export interface TelemetryRow {
   online: boolean;
 }
 
-export type RunStatus = "planning" | "running" | "merging" | "done" | "failed";
+export type RunStatus = "planning" | "running" | "merging" | "done" | "failed" | "cancelled";
 
 export interface RunRecord {
   id: string;

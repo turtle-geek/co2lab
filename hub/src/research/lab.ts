@@ -262,7 +262,7 @@ export class ResearchLab {
     for (const c of this.captures.values()) {
       if (c.runId !== run.id || c.status !== "capturing") continue;
       const sub = run.subtasks.find((s) => s.id === c.subtaskId) ?? run.subtasks[0];
-      if (sub?.status === "failed" || sub?.status === "cancelled" || (run.status === "failed" && sub?.status !== "done")) {
+      if (sub?.status === "failed" || sub?.status === "cancelled" || ((run.status === "failed" || run.status === "cancelled") && sub?.status !== "done")) {
         c.status = "failed";
         c.error = sub?.error ?? run.error ?? "capture failed";
       } else if (sub?.status === "done") {

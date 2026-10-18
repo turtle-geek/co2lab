@@ -167,6 +167,8 @@ export class MockHub {
     switch (msg.type) {
       case "run.create":
         return this.createRun(msg.clientRunId, msg.prompt);
+      case "run.cancel":
+        return this.cancelRun(msg.runId);
       case "pair.start": {
         this.pairCode = String(Math.floor(100000 + Math.random() * 900000));
         this.sendTo(sock, { type: "pair.code", code: this.pairCode, qrPayload: pairingQrPayload(location.origin, this.pairCode), expiresAt: Date.now() + 5 * 60_000 });
@@ -369,6 +371,7 @@ export class MockHub {
     this.pushRun(run);
     const failPopeyes = /fail/i.test(prompt);
     setTimeout(() => {
+      if (run.view.status !== "planning") return; // cancelled meanwhile
       addBurn(run.view.burn, 820, 140);
       run.subtasks = Object.entries(SCRIPTS).map(([cap, s]) => ({
         view: { id: this.id("sub"), capability: cap, goal: `Collect current offers from ${s.label}`, name: `${s.label} offers`, tool: "deals", wave: 1, status: "queued", deviceId: null, attempt: 1, error: null, dealCount: 0 },
@@ -384,6 +387,21 @@ export class MockHub {
       this.schedule();
       this.pushRun(run);
     }, 1500);
+  }
+
+  private cancelRun(runId: string) {
+    const run = this.runs.find((r) => r.view.id === runId);
+    if (!run || run.view.status === "done" || run.view.status === "failed" || run.view.status === "cancelled") return;
+    for (const s of run.subtasks) {
+      if (s.view.status !== "queued" && s.view.status !== "running") continue;
+      if (s.view.deviceId && s.view.status === "running") this.patch(s.view.deviceId, { state: this.forced.get(s.view.deviceId) ?? "idle", currentTask: null });
+      s.view.status = "cancelled";
+    }
+    run.view.status = "cancelled";
+    run.view.error = "Cancelled";
+    run.view.finishedAt = Date.now();
+    this.pushRun(run);
+    this.schedule();
   }
 
   private pushRun(run: RunSim) {
@@ -501,6 +519,7 @@ export class MockHub {
     run.view.status = "merging";
     this.pushRun(run);
     setTimeout(() => {
+      if (run.view.status !== "merging") return; // cancelled meanwhile
       addBurn(run.view.burn, 1900, 420);
       const sorted = [...run.collected].sort((a, b) => b.deal.confidence - a.deal.confidence);
       run.view.ranked = sorted.map((c, i) => ({ ...c.deal, rank: i + 1, reason: i === 0 ? "Biggest saving for lunch today" : "Good value near UTSC", deviceId: c.deviceId }));

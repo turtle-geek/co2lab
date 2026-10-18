@@ -135,6 +135,14 @@ function shares(d: DeviceView): string {
  * The request as a task tree: a parent row (title, done / to-do counts, time), then groups: the devices
  * the planner looked at, one group per planning round (named by the planner), and the final step.
  */
+/** What a cancelled run got through before it stopped. */
+function cancelNote(run: RunView): string {
+  const n = run.subtasks.length;
+  const done = run.subtasks.filter((s) => s.status === "done").length;
+  if (!n) return "Stopped while Gemini was planning.";
+  return `Stopped after ${done} of ${n} task${n === 1 ? "" : "s"}.`;
+}
+
 function Steps({ run, devices }: { run: RunView; devices: DeviceView[] }) {
   const now = useNow();
   const deviceName = (id: string | null) => (id ? devices.find((d) => d.id === id)?.name ?? "removed device" : null);
@@ -145,7 +153,7 @@ function Steps({ run, devices }: { run: RunView; devices: DeviceView[] }) {
   const done = run.subtasks.filter((s) => s.status === "done").length;
   const todo = run.subtasks.filter((s) => s.status === "queued" || s.status === "running").length;
   const failed = run.subtasks.filter((s) => s.status === "failed").length;
-  const finished = run.status === "done" || run.status === "failed";
+  const finished = run.status === "done" || run.status === "failed" || run.status === "cancelled";
   const thinkingAgain = run.status === "running" && general && run.subtasks.length > 0 && run.subtasks.every((s) => s.status !== "queued" && s.status !== "running");
   // Devices the planner could use: the ones it gave work to, plus any online one that shares something.
   const used = new Set(run.subtasks.map((s) => s.deviceId).filter(Boolean));
@@ -165,7 +173,7 @@ function Steps({ run, devices }: { run: RunView; devices: DeviceView[] }) {
   return (
     <div className="ttree" aria-label="What the agents are doing">
       <div className="ttree__head">
-        <StepIcon state={planning || !finished ? "running" : run.status === "failed" ? "failed" : "done"} />
+        <StepIcon state={planning || !finished ? "running" : run.status === "failed" ? "failed" : run.status === "cancelled" ? "skipped" : "done"} />
         <span className="ttree__title">{run.title || (planning ? "Planning" : run.prompt)}</span>
         {done > 0 && <span className="tchip tchip--done">{done} done</span>}
         {todo > 0 && <span className="tchip tchip--todo">{todo} to do</span>}
@@ -208,16 +216,18 @@ function Steps({ run, devices }: { run: RunView; devices: DeviceView[] }) {
             </ul>
           </li>
         )}
-        {run.subtasks.length > 0 && (
+        {(run.subtasks.length > 0 || run.status === "cancelled") && (
           <li className="tgroup">
             <span className="tgroup__name">Finish</span>
             <ul>
               <Row
-                state={run.status === "merging" ? "running" : run.status === "done" ? "done" : run.status === "failed" ? "failed" : "waiting"}
+                state={run.status === "merging" ? "running" : run.status === "done" ? "done" : run.status === "failed" ? "failed" : run.status === "cancelled" ? "skipped" : "waiting"}
                 name={general ? "Write the answer" : "Rank the deals"}
                 result={
                   run.status === "failed"
                     ? run.error ?? "no task finished"
+                    : run.status === "cancelled"
+                      ? "cancelled"
                     : run.status === "done"
                       ? general
                         ? "answer ready"
@@ -348,7 +358,7 @@ export function Results({
     );
   }
 
-  const finished = run.status === "done" || run.status === "failed";
+  const finished = run.status === "done" || run.status === "failed" || run.status === "cancelled";
   const outcome = (
     <>
         {run.answer && (
@@ -371,6 +381,11 @@ export function Results({
                 ))}
               </ol>
             )}
+          </div>
+        )}
+        {run.status === "cancelled" && (
+          <div className="results__cancelled">
+            <b>Cancelled.</b> {cancelNote(run)}
           </div>
         )}
         {run.status === "failed" && (
@@ -407,9 +422,9 @@ export function Results({
         // Finished: the answer is the main thing; the steps fold into one line you can open.
         <>
           {outcome}
-          <details className="steps-fold">
+          <details className="steps-fold" open={run.status === "cancelled" || undefined}>
             <summary>
-              <StepIcon state={run.status === "failed" ? "failed" : "done"} />
+              <StepIcon state={run.status === "failed" ? "failed" : run.status === "cancelled" ? "skipped" : "done"} />
               <span>
                 {run.subtasks.length + 2} steps · {Math.max(1, Math.round(((run.finishedAt ?? Date.now()) - run.createdAt) / 1000))} s
               </span>

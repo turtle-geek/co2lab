@@ -55,7 +55,7 @@ create table if not exists run (
   id            text primary key,
   client_run_id text not null unique,
   prompt        text not null,
-  status        text not null check (status in ('planning', 'running', 'merging', 'done', 'failed')),
+  status        text not null check (status in ('planning', 'running', 'merging', 'done', 'failed', 'cancelled')),
   config        jsonb not null,
   config_id     text references config (id),
   ranked        jsonb,
@@ -64,6 +64,9 @@ create table if not exists run (
   created_at    timestamptz not null,
   finished_at   timestamptz
 );
+-- Re-created on every start so the 'cancelled' run status reaches existing databases.
+alter table run drop constraint if exists run_status_check;
+alter table run add constraint run_status_check check (status in ('planning', 'running', 'merging', 'done', 'failed', 'cancelled'));
 create index if not exists run_created on run (created_at desc);
 
 create table if not exists subtask (

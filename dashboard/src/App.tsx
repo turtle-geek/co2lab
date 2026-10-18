@@ -165,6 +165,11 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
                 if (ok) setTab("agent");
                 return ok;
               }}
+              onCancel={
+                run && (run.status === "planning" || run.status === "running" || run.status === "merging")
+                  ? () => hub.send({ type: "run.cancel", runId: run.id })
+                  : undefined
+              }
             />
             <BurnMeter run={run} />
           </div>
