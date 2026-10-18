@@ -234,7 +234,7 @@ export interface AnswerSection {
 const AnswerSchema = z.object({
   text: z.string().max(2000),
   items: z
-    .array(z.object({ title: z.string(), detail: z.string(), section: z.number().int().min(0), url: z.string().nullable() }))
+    .array(z.object({ title: z.string(), detail: z.string(), price: z.string().nullable(), section: z.number().int().min(0), url: z.string().nullable() }))
     .max(12),
 });
 
@@ -247,6 +247,7 @@ export async function composeAnswer(o: { prompt: string; sections: AnswerSection
     system:
       "Answer the owner's request using only the findings below (each numbered section came from one device task). " +
       "text: a short, direct answer (2-5 sentences) with the key numbers. items: the best concrete options, ranked, each " +
+      "with a short title (the product, game or offer name only), price as written but short (e.g. \"$12.49\", \"Free\", \"2 for $7\", null if none), detail = one sentence of evidence, and " +
       "with the section number it came from. If the findings do not answer the request, say exactly what is missing. " +
       "For review analysis, compare games by complaints per 100 reviews (how common a problem is), not by the share of " +
       "negative mentions alone, and say how many reviews were analyzed.",
@@ -262,7 +263,7 @@ export async function composeAnswer(o: { prompt: string; sections: AnswerSection
     text: r.text,
     items: r.items.map((it) => {
       const s = o.sections[it.section];
-      return { title: it.title, detail: it.detail, source: s?.source ?? "?", deviceId: s?.deviceId ?? null, url: it.url };
+      return { title: it.title, detail: it.detail, price: it.price?.trim() ? it.price.trim().slice(0, 24) : null, source: s?.source ?? "?", deviceId: s?.deviceId ?? null, url: it.url };
     }),
   };
 }

@@ -135,6 +135,8 @@ export const RunAnswer = z.object({
     z.object({
       title: z.string(),
       detail: z.string(),
+      /** Short price as shown, e.g. "$12.49", "Free", "2 for $7"; null when not about a price. */
+      price: z.string().nullable().optional(),
       /** Where it came from: an app, a site, or "review analysis". */
       source: z.string(),
       deviceId: z.string().nullable(),
@@ -200,6 +202,8 @@ export const RunView = z.object({
   ranked: z.array(RankedDeal).nullable(),
   /** General-agent requests (P4): the answer, with each item's source. Deal requests use `ranked`. */
   answer: RunAnswer.nullable().optional(),
+  /** General agent: the planner's reasoning for this run (first plan, then follow-ups). */
+  plan: z.string().nullable().optional(),
   burn: Burn,
   error: z.string().nullable(),
   createdAt: z.number(),

@@ -65,7 +65,8 @@ function Server() {
   );
 }
 
-export function DeviceScene({ kind, mood }: { kind: DeviceKind; mood: DeviceState }) {
+/** `frame`: the device's live screen (data URL) while it works; it fills the drawn screen, with a small mood tree in the corner. */
+export function DeviceScene({ kind, mood, frame }: { kind: DeviceKind; mood: DeviceState; frame?: string | null }) {
   const id = useId().replace(/:/g, "");
   // The tree keeps the same spot in every mood so the trunk never jumps; only the crown morphs.
   // Desktops are drawn as laptops for now.
@@ -91,7 +92,15 @@ export function DeviceScene({ kind, mood }: { kind: DeviceKind; mood: DeviceStat
       <g clipPath={`url(#${clip})`}>
         <rect className="device__screen" {...screen} />
         {mood === "working" && <rect className="device__glow" {...screen} fill={`url(#${glow})`} />}
-        <Tree mood={mood} placement={tree} />
+        {frame ? (
+          <>
+            <image className="device__live" href={frame} x={screen.x} y={screen.y} width={screen.width} height={screen.height} preserveAspectRatio="xMidYMin slice" />
+            <rect className="device__live-badge" x={screen.x + screen.width - 38} y={screen.y + screen.height - 38} width="34" height="34" rx="10" />
+            <Tree mood={mood} placement={{ x: screen.x + screen.width - 40, y: screen.y + screen.height - 40, width: 38, height: 38 }} />
+          </>
+        ) : (
+          <Tree mood={mood} placement={tree} />
+        )}
       </g>
       {art === "laptop" && <circle className="device__cam" cx="120" cy="17" r="2" />}
       {kind === "android" && <circle className="device__cam" cx="120" cy="25" r="3.2" />}

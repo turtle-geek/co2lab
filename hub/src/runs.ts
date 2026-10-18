@@ -120,6 +120,8 @@ export class RunManager {
   private queuedAt = new Map<string, number>();
   private runCreating = new Map<string, Promise<RunView>>();
   private general = new Map<string, GeneralTask>();
+  /** The agent planner's reasoning per run, shown on the dashboard. */
+  private plans = new Map<string, string>();
   /** Runs planned by the general agent (not deal-only); wave 2 = follow-up already planned. */
   /** Runs planned by the general agent (not deal-only); wave counts the planning rounds so far (max MAX_WAVES). */
   private agentRuns = new Map<string, { wave: number }>();
@@ -163,6 +165,7 @@ export class RunManager {
       })),
       ranked: r.ranked,
       answer: r.answer ?? null,
+      plan: this.plans.get(r.id) ?? null,
       burn: r.burn,
       error: r.error,
       createdAt: r.createdAt,
@@ -293,6 +296,7 @@ export class RunManager {
       model: null,
     });
     log.info(`run ${run.id} agent plan: ${plan.reasoning.slice(0, 200)}`);
+    this.plans.set(run.id, plan.reasoning);
     if (!deals.length && !general.length)
       return this.failRun(run, plan.cannotDo ?? (dropped.length ? `no online device can ${dropped.join("; ")}` : "the planner found nothing the devices can do"));
     if (!general.length) return this.startSubtasks(run, deals, "agent (deals)");
@@ -850,6 +854,7 @@ export class RunManager {
         const { deals, general } = this.validate(plan.tasks);
         if (deals.length || general.length) {
           log.info(`run ${run.id} follow-up: ${plan.reasoning.slice(0, 200)}`);
+          this.plans.set(run.id, [this.plans.get(run.id), `Follow-up: ${plan.reasoning}`].filter(Boolean).join("\n\n"));
           this.saveStep({ time: Date.now(), runId: run.id, subtaskId: null, deviceId: null, kind: "plan", detail: { planner: "agent follow-up", reasoning: plan.reasoning, tasks: plan.tasks }, tokensIn: 0, tokensOut: 0, model: null });
           this.addGeneral(run, general);
           if (deals.length) this.startSubtasks(run, deals, "agent follow-up");

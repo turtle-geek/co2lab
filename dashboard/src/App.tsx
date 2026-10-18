@@ -155,11 +155,12 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             connected={connected}
             onAdd={openPair}
             onRevoke={(id) => hub.send({ type: "device.revoke", deviceId: id })}
+            frames={state.frames}
           />
 
 
-          <div className={state.devices.some((d) => d.state === "working" || d.currentTask) ? "split" : "split split--solo"}>
-            <LiveScreens devices={state.devices} frames={state.frames} steps={state.steps} />
+          <div className={state.devices.some((d) => d.state === "working" || d.currentTask) || (run && (run.finishedAt === null || Date.now() - run.finishedAt < 60_000) && run.subtasks.some((s) => s.deviceId && state.frames[s.deviceId])) ? "split" : "split split--solo"}>
+            <LiveScreens devices={state.devices} frames={state.frames} steps={state.steps} run={run} />
             <Results
               run={run}
               devices={state.devices}

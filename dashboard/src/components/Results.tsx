@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { ApprovalView, DeviceView, RankedDeal, RunView, SubtaskView } from "@co2lab/shared";
-import { SOURCE_LABEL, capabilityLabel } from "../format";
+import { SOURCE_LABEL, capabilityLabel, useNow } from "../format";
 
 const SUB_STATUS: Record<SubtaskView["status"], string> = {
   queued: "Queued",
@@ -33,26 +33,108 @@ function SubtaskRow({ s, deviceName }: { s: SubtaskView; deviceName: (id: string
   );
 }
 
-function DealCard({ d, deviceName }: { d: RankedDeal; deviceName: (id: string | null) => string | null }) {
-  const dev = deviceName(d.deviceId);
+/** "[Wendy's] $4.99 value combo" -> store "Wendy's", title "$4.99 value combo". */
+function splitStore(title: string): { store: string | null; title: string } {
+  const m = /^\s*\[([^\]]{1,40})\]\s*(.+)$/.exec(title);
+  return m ? { store: m[1]!.trim(), title: m[2]!.trim() } : { store: null, title: title.trim() };
+}
+
+/** Keeps the price column short and comparable: "from $8.99", "$4.99", "Free", "2 for $7". */
+function shortPrice(p: string | null | undefined): { short: string | null; rest: string | null } {
+  if (!p?.trim()) return { short: null, rest: null };
+  const t = p.trim();
+  if (t.length <= 14) return { short: t, rest: null };
+  const m = /(\d+\s*for\s*\$\s?\d+(?:\.\d{2})?|free|\$\s?\d+(?:\.\d{2})?)/i.exec(t);
+  if (!m) return { short: null, rest: t };
+  const from = /\bfrom\b/i.test(t.slice(0, m.index + 6)) ? "from " : "";
+  return { short: `${from}${m[1]!.replace(/\s+/g, " ")}`, rest: t };
+}
+
+/** One ranked result, the same layout for deals and for general-agent answers. */
+function ResultRow(props: {
+  rank: number;
+  chip: string;
+  chipClass: string;
+  title: string;
+  url: string | null;
+  price: string | null | undefined;
+  lines: (string | null | undefined | false)[];
+  foot: string | null;
+  note?: string | null;
+}) {
+  const { store, title } = splitStore(props.title);
+  const price = shortPrice(props.price);
   return (
-    <li className={`deal deal--${d.source}`}>
-      <span className="deal__rank">{d.rank}</span>
+    <li className="deal">
+      <span className="deal__rank">{props.rank}</span>
       <div className="deal__main">
         <div className="deal__top">
-          <span className={`deal__source deal__source--${d.source}`}>{SOURCE_LABEL[d.source]}</span>
-          {d.priceText && <span className="deal__price">{d.priceText}</span>}
+          <span className={`deal__source ${props.chipClass}`}>{props.chip}</span>
+          {store && <span className="deal__store">{store}</span>}
         </div>
-        <h3 className="deal__title">{d.url ? <a href={d.url} target="_blank" rel="noreferrer">{d.title}</a> : d.title}</h3>
-        {d.conditions && <p className="deal__cond">{d.conditions}</p>}
-        <p className="deal__meta">
-          {d.expiresText ? <span>Expires {d.expiresText}</span> : <span>No expiry shown</span>}
-          {dev && <span> · found by {dev}</span>}
-          {d.confidence < 0.6 && <span className="deal__low"> · low confidence</span>}
-        </p>
-        {d.reason && <p className="deal__reason">{d.reason}</p>}
+        <h3 className="deal__title" title={title}>
+          {props.url ? (
+            <a href={props.url} target="_blank" rel="noreferrer">
+              {title}
+            </a>
+          ) : (
+            title
+          )}
+        </h3>
+        {[price.rest && price.rest !== price.short ? price.rest : null, ...props.lines].filter(Boolean).map((l, i) => (
+          <p key={i} className="deal__cond">
+            {l}
+          </p>
+        ))}
+        {props.foot && <p className="deal__meta">{props.foot}</p>}
+        {props.note && <p className="deal__reason">{props.note}</p>}
       </div>
+      <span className={price.short ? "deal__price" : "deal__price deal__price--none"}>{price.short ?? "—"}</span>
     </li>
+  );
+}
+
+function DealCard({ d, deviceName }: { d: RankedDeal; deviceName: (id: string | null) => string | null }) {
+  const dev = deviceName(d.deviceId);
+  const foot = [d.expiresText ? `Expires ${d.expiresText}` : "No expiry shown", dev && `found by ${dev}`, d.confidence < 0.6 && "low confidence"]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <ResultRow
+      rank={d.rank}
+      chip={SOURCE_LABEL[d.source]}
+      chipClass={`deal__source--${d.source}`}
+      title={d.title}
+      url={d.url}
+      price={d.priceText}
+      lines={[d.conditions]}
+      foot={foot}
+      note={d.reason}
+    />
+  );
+}
+
+function PlanningState({ since }: { since: number }) {
+  const now = useNow();
+  return (
+    <div className="planning" role="status">
+      <span className="spinner" aria-hidden />
+      <div>
+        <b>Planning with Gemini…</b> <span className="planning__secs">{Math.max(0, Math.round((now - since) / 1000))} s</span>
+        <p>Checking which devices are online and what each one has (apps, games, browser), then choosing the tasks.</p>
+      </div>
+    </div>
+  );
+}
+
+function PlanBox({ plan }: { plan: string }) {
+  return (
+    <details className="planbox" open>
+      <summary>Why this plan</summary>
+      {plan.split(/\n\n+/).map((p, i) => (
+        <p key={i}>{p}</p>
+      ))}
+    </details>
   );
 }
 
@@ -159,7 +241,8 @@ export function Results({
         Results <span className="results__prompt">“{run.prompt}”</span>
       </h2>
 
-      {run.status === "planning" && <p className="results__state">Planning subtasks…</p>}
+      {run.status === "planning" && <PlanningState since={run.createdAt} />}
+      {run.plan && <PlanBox plan={run.plan} />}
       {run.subtasks.length > 0 && (
         <ul className="subtasks" aria-label="Subtasks">
           {run.subtasks.map((s) => (
@@ -173,16 +256,19 @@ export function Results({
         <div className="answer">
           <p className="answer__text">{run.answer.text}</p>
           {run.answer.items.length > 0 && (
-            <ol className="answer__items">
+            <ol className="deals">
               {run.answer.items.map((it, i) => (
-                <li key={i}>
-                  <b>{it.url ? <a href={it.url} target="_blank" rel="noreferrer">{it.title}</a> : it.title}</b>
-                  <span> — {it.detail}</span>
-                  <span className="answer__src">
-                    {it.source}
-                    {deviceName(it.deviceId) ? ` · ${deviceName(it.deviceId)}` : ""}
-                  </span>
-                </li>
+                <ResultRow
+                  key={i}
+                  rank={i + 1}
+                  chip={it.source}
+                  chipClass="deal__source--agent"
+                  title={it.title}
+                  url={it.url}
+                  price={it.price}
+                  lines={[it.detail]}
+                  foot={deviceName(it.deviceId) ? `found by ${deviceName(it.deviceId)}` : null}
+                />
               ))}
             </ol>
           )}

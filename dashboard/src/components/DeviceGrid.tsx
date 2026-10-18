@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { DeviceView } from "@co2lab/shared";
 import { DeviceScene } from "./DeviceScene";
 import { STATE_LABEL, ago, useNow } from "../format";
+import type { LiveFrame } from "../state/hubState";
 
 const SEGMENTS = 5;
 
@@ -56,14 +57,14 @@ function TelemetryLine({ device, now }: { device: DeviceView; now: number }) {
 
 const KIND_LABEL: Record<DeviceView["kind"], string> = { android: "Phone", laptop: "Laptop", desktop: "Desktop", cloud: "Cloud" };
 
-export function TreeCard({ device, readOnly, onRevoke }: { device: DeviceView; readOnly: boolean; onRevoke(id: string): void }) {
+export function TreeCard({ device, readOnly, onRevoke, frame }: { device: DeviceView; readOnly: boolean; onRevoke(id: string): void; frame?: LiveFrame }) {
   const now = useNow();
   const [confirming, setConfirming] = useState(false);
   const task = device.currentTask;
   return (
     <article className={`card tree-card tree-card--${device.state}`} aria-label={`${device.name}, ${STATE_LABEL[device.state]}`}>
       <div className="tree-card__art">
-        <DeviceScene kind={device.kind} mood={device.state} />
+        <DeviceScene kind={device.kind} mood={device.state} frame={liveSrc(device, frame, now)} />
         <span className="tree-card__kind">{KIND_LABEL[device.kind]}</span>
       </div>
       <div className="tree-card__body">
@@ -131,8 +132,11 @@ export function DeviceGrid({
   connected,
   onRevoke,
   onAdd,
+  frames,
 }: {
   devices: DeviceView[];
+  /** Latest live frame per device: shown on the device's own screen while it works. */
+  frames?: Record<string, LiveFrame>;
   readOnly: boolean;
   connected: boolean;
   onRevoke(id: string): void;
@@ -141,7 +145,7 @@ export function DeviceGrid({
   return (
     <section className="device-grid" aria-label="Devices">
       {devices.map((d) => (
-        <TreeCard key={d.id} device={d} readOnly={readOnly} onRevoke={onRevoke} />
+        <TreeCard key={d.id} device={d} readOnly={readOnly} onRevoke={onRevoke} frame={frames?.[d.id]} />
       ))}
       {!readOnly && <AddDeviceCard onClick={onAdd} disabled={!connected} />}
       {readOnly && devices.length === 0 && <p className="empty">No devices paired yet.</p>}
@@ -157,4 +161,10 @@ function sharesLine(d: DeviceView): string | null {
   const browser = c.find((x) => x.kind === "browser")?.label;
   const parts = [apps ? `${apps} apps` : "", games ? `${games} Steam game${games === 1 ? "" : "s"}` : "", browser ?? ""].filter(Boolean);
   return parts.length ? parts.join(" · ") : null;
+}
+
+/** The live frame to draw on the device's screen: only while it works and the frame is recent. */
+function liveSrc(d: DeviceView, frame: LiveFrame | undefined, now: number): string | null {
+  if (!frame || !(d.state === "working" || d.currentTask)) return null;
+  return now - frame.at < 15_000 ? frame.src : null;
 }
