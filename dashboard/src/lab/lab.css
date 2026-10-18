@@ -72,3 +72,18 @@
 
 .findings { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .finding p { margin: 0 0 2px; }
+
+/* Experiment card: takeaway first, details folded */
+.exp__take { margin: 0; color: var(--ink); font-size: 0.98rem; line-height: 1.45; }
+.verdict { display: inline-block; margin-right: 8px; padding: 1px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; vertical-align: 2px; }
+.verdict--yes { background: var(--green-pill); color: var(--green-deep); }
+.verdict--no { background: var(--red-soft); color: var(--red); }
+.verdict--mid { background: var(--amber-soft); color: #8a5a10; }
+.exp__steer { margin: 0; font-size: 0.88rem; color: var(--ink-2); }
+.exp__papers { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-2); }
+.paper-tag { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; font-weight: 700; color: var(--ink); }
+.trials__best td { background: var(--green-pill); }
+.best-tag { margin-left: 6px; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; color: var(--green-deep); }
+.exp__next { margin: 0; font-size: 0.88rem; color: var(--ink-2); }
+.exp__more > summary { cursor: pointer; color: var(--muted); font-weight: 700; font-size: 0.85rem; }
+.exp__more[open] { display: grid; gap: 8px; }

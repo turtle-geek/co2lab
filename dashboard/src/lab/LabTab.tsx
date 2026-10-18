@@ -2,7 +2,7 @@
 // Experiments arrive over the WebSocket (props); captures and findings come from GET /api/research.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AgentConfig, AppId, CaptureView, Deal, ExperimentView, LabelItem, ResearchState } from "@co2lab/shared";
+import type { AgentConfig, AppId, CaptureView, Deal, ExperimentView, FindingView, LabelItem, ResearchState } from "@co2lab/shared";
 import type { LabProps } from "../labSlot";
 import "./lab.css";
 
@@ -64,6 +64,7 @@ export default function LabTab({ experiments, readOnly, connected, send }: LabPr
       captures={data?.captures ?? []}
       allFeedback={allFeedback}
       parentTitle={experiments.find((x) => x.id === e.parentId)?.title ?? null}
+      finding={data?.findings.find((f) => f.experimentId === e.id) ?? null}
       can={can && !data?.busy}
       readOnly={readOnly}
       onFeedback={(kind, text) => act({ type: "research.feedback", experimentId: e.id, kind, text })}
@@ -346,6 +347,8 @@ function Experiment(props: {
   captures: CaptureView[];
   allFeedback: Map<string, ExperimentView["feedback"][number] & { on: string }>;
   parentTitle: string | null;
+  /** The saved one-line finding: the card's takeaway. */
+  finding: FindingView | null;
   can: boolean;
   readOnly: boolean;
   onFeedback(kind: "flag" | "approve" | "redirect", text: string): void;
@@ -365,6 +368,15 @@ function Experiment(props: {
   const misreads = e.trials.flatMap((t) => (t.misreads ?? []).map((m) => ({ ...m, cfg: e.configs[t.configIndex] })));
   const failed = e.trials.filter((t) => t.error);
   const actionable = !e.supersededBy && (e.status === "proposed" || e.status === "analyzed") && !(e.error && !e.configs.length);
+  const verdict = /verdict:\s*(supported|refuted|partly supported|partially supported|inconclusive)/i.exec(e.analysis ?? "")?.[1]?.toLowerCase() ?? null;
+  // The winner: the cheapest setting that found every deal with no fakes; otherwise the one that found the most.
+  const tried = rows.map((row, i) => ({ ...row, i })).filter((row) => row.ok.length > 0);
+  const perfect = tried.filter((row) => (row.r ?? 0) >= 0.999 && (row.p ?? 0) >= 0.999);
+  const best =
+    e.status !== "analyzed"
+      ? -1
+      : ((perfect.length ? [...perfect].sort((a, b) => (a.cost ?? 0) - (b.cost ?? 0)) : [...tried].sort((a, b) => (b.r ?? 0) - (a.r ?? 0)))[0]?.i ?? -1);
+  const firstSentence = (t: string) => /^(.{20,240}?[.!?])(\s|$)/.exec(t.replace(/\s+/g, " "))?.[1] ?? t.slice(0, 220);
 
   return (
     <li className={`exp exp--${status}`}>
@@ -373,35 +385,30 @@ function Experiment(props: {
         <h3>{e.title ?? "Experiment"}</h3>
         <span className="lab-meta">{e.createdAt ? when(e.createdAt) : ""}</span>
       </div>
-      {props.parentTitle && <p className="lab-meta">Follows “{props.parentTitle}”</p>}
-      <p className="exp__hyp">{e.hypothesis}</p>
 
+      {/* Takeaway first: the verdict and the saved one-line finding (or the hypothesis' first sentence before it runs). */}
+      <p className="exp__take">
+        {verdict && (
+          <span className={`verdict verdict--${verdict.startsWith("supported") ? "yes" : verdict === "refuted" ? "no" : "mid"}`}>{verdict}</span>
+        )}
+        {props.finding ? props.finding.summary : verdict ? firstSentence(e.analysis!.replace(/^verdict:[^\n]*\n*/i, "")) : firstSentence(e.hypothesis)}
+      </p>
       {cited.length > 0 && (
-        <div className="exp__cites exp__cites--fb">
-          <strong>Answers owner feedback</strong>
-          <ul>
-            {cited.map((f) => (
-              <li key={f.id}>
-                <span className={`fb fb--${f.kind}`}>{f.kind}</span> “{f.text}” <span className="lab-meta">on {f.on}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <p className="exp__steer">
+          <span className={`fb fb--${cited[0]!.kind}`}>your {cited[0]!.kind}</span> “{cited[0]!.text}”
+        </p>
       )}
       {(e.papiers?.length ?? 0) > 0 && (
-        <div className="exp__cites">
-          <strong>Read from Papiers</strong>
-          <ul>
-            {e.papiers!.map((p) => (
-              <li key={p.ref}>
-                <code>{p.ref}</code> {p.title} — {p.use}
-                <blockquote>{p.excerpt.replace(/\s+/g, " ").slice(0, 280)}…</blockquote>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <p className="exp__papers">
+          Based on
+          {e.papiers!.map((pp) => (
+            <span key={pp.ref} className="paper-tag" title={pp.title ?? undefined}>
+              {(pp.title ?? pp.ref).split(":")[0]!.trim()}
+            </span>
+          ))}
+          <span className="lab-meta">from Papiers</span>
+        </p>
       )}
-      {e.papiersError && <p className="lab-meta">Papiers: {e.papiersError}</p>}
       {e.error && <p className="lab-error">{e.error}</p>}
 
       {e.configs.length > 0 && (
@@ -409,33 +416,34 @@ function Experiment(props: {
           <table className="trials">
             <thead>
               <tr>
-                <th>Config</th>
-                <th>Precision</th>
-                <th>Recall</th>
-                <th>Exact price</th>
-                <th>Tokens</th>
-                <th>Latency</th>
-                <th>Cost / capture</th>
+                <th>Setting</th>
+                <th title="Share of the real deals it found (recall)">Found</th>
+                <th title="Share of what it reported that is real (precision)">No fakes</th>
+                <th title="Real deals read with exactly the right price">Right price</th>
+                <th>Cost</th>
+                <th>Time</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ c, ts, ok, p, r, x, tok, lat, cost }, i) => (
-                <tr key={i}>
-                  <td>{cfgLabel(c)}</td>
+              {rows.map(({ c, ts, ok, p, r, x, lat, cost }, i) => (
+                <tr key={i} className={i === best ? "trials__best" : ""}>
+                  <td>
+                    {cfgLabel(c)}
+                    {i === best && <span className="best-tag">best</span>}
+                  </td>
                   {ts.length === 0 ? (
-                    <td colSpan={6} className="lab-meta">
+                    <td colSpan={5} className="lab-meta">
                       {e.status === "running" ? "waiting…" : "not run"}
                     </td>
                   ) : ok.length === 0 ? (
-                    <td colSpan={6} className="lab-error">failed</td>
+                    <td colSpan={5} className="lab-error">failed</td>
                   ) : (
                     <>
-                      <td>{pct(p!)}</td>
                       <td>{pct(r!)}</td>
+                      <td>{pct(p!)}</td>
                       <td className={x! < 1 ? "bad" : ""}>{pct(x!)}</td>
-                      <td>{Math.round(tok!).toLocaleString()}</td>
+                      <td>${cost!.toFixed(4)}</td>
                       <td>{(lat! / 1000).toFixed(1)} s</td>
-                      <td>${cost!.toFixed(5)}</td>
                     </>
                   )}
                 </tr>
@@ -450,55 +458,11 @@ function Experiment(props: {
         </div>
       )}
 
-      {(misreads.length > 0 || failed.length > 0) && (
-        <details className="exp__mis">
-          <summary>
-            {misreads.length} misread(s){failed.length ? `, ${failed.length} failed trial(s)` : ""}
-          </summary>
-          <ul>
-            {failed.map((t, i) => (
-              <li key={`f${i}`} className="lab-error">
-                {cfgLabel(e.configs[t.configIndex]!)}: {t.error}
-              </li>
-            ))}
-            {misreads.slice(0, 80).map((m, i) => (
-              <li key={i}>
-                <span className="lab-meta">{m.cfg ? cfgLabel(m.cfg) : ""} · {m.app}:</span>{" "}
-                {m.kind === "price" && (
-                  <>
-                    read <b>{m.got ?? "no price"}</b> for “{m.title}” (really <b>{m.expected ?? "none"}</b>)
-                  </>
-                )}
-                {m.kind === "missed" && <>missed “{m.title}” {m.expected && `(${m.expected})`}</>}
-                {m.kind === "extra" && <>reported “{m.title}”, which is not there</>}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-
-      {e.analysis && (
-        <div className="exp__analysis">
-          <strong>Analysis</strong>
-          <p>{e.analysis}</p>
-        </div>
-      )}
-      {e.nextProposal && (
+      {e.nextProposal && actionable && (
         <p className="exp__next">
-          <strong>Proposed next:</strong> {e.nextProposal}
+          <strong>Next idea:</strong> {e.nextProposal}
         </p>
       )}
-
-      {e.feedback.length > 0 && (
-        <ul className="exp__fb">
-          {e.feedback.map((f) => (
-            <li key={f.id}>
-              <span className={`fb fb--${f.kind}`}>{f.kind}</span> {f.text} <span className="lab-meta">{when(f.createdAt)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-
       {!props.readOnly && actionable && (
         <div className="exp__actions">
           {mode ? (
@@ -541,14 +505,78 @@ function Experiment(props: {
           )}
         </div>
       )}
-      {e.findingRef && (
-        <p className="lab-meta">
-          Finding saved ·{" "}
-          <a href={withViewer(`/api/research/findings/${e.findingRef}.md`)} download>
-            Export Markdown
-          </a>
+      <details className="exp__more">
+        <summary>Details</summary>
+        {props.parentTitle && <p className="lab-meta">Follows “{props.parentTitle}”</p>}
+        <p className="exp__hyp">
+          <strong>Hypothesis.</strong> {e.hypothesis}
         </p>
+        {(e.papiers?.length ?? 0) > 0 && (
+          <div className="exp__cites">
+            <strong>Read from Papiers</strong>
+            <ul>
+              {e.papiers!.map((pp) => (
+                <li key={pp.ref}>
+                  {pp.title}: {pp.use} <code>{pp.ref}</code>
+                  <blockquote>{pp.excerpt.replace(/\s+/g, " ").slice(0, 280)}…</blockquote>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {e.papiersError && <p className="lab-meta">Papiers: {e.papiersError}</p>}
+        {e.analysis && (
+          <div className="exp__analysis">
+            <strong>Full analysis</strong>
+            <p>{e.analysis}</p>
+          </div>
+        )}
+      {(misreads.length > 0 || failed.length > 0) && (
+        <details className="exp__mis">
+          <summary>
+            {misreads.length} misread(s){failed.length ? `, ${failed.length} failed trial(s)` : ""}
+          </summary>
+          <ul>
+            {failed.map((t, i) => (
+              <li key={`f${i}`} className="lab-error">
+                {cfgLabel(e.configs[t.configIndex]!)}: {t.error}
+              </li>
+            ))}
+            {misreads.slice(0, 80).map((m, i) => (
+              <li key={i}>
+                <span className="lab-meta">{m.cfg ? cfgLabel(m.cfg) : ""} · {m.app}:</span>{" "}
+                {m.kind === "price" && (
+                  <>
+                    read <b>{m.got ?? "no price"}</b> for “{m.title}” (really <b>{m.expected ?? "none"}</b>)
+                  </>
+                )}
+                {m.kind === "missed" && <>missed “{m.title}” {m.expected && `(${m.expected})`}</>}
+                {m.kind === "extra" && <>reported “{m.title}”, which is not there</>}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
+
+        {e.feedback.length > 0 && (
+          <ul className="exp__fb">
+            {e.feedback.map((f) => (
+              <li key={f.id}>
+                <span className={`fb fb--${f.kind}`}>{f.kind}</span> {f.text} <span className="lab-meta">{when(f.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {e.findingRef && (
+          <p className="lab-meta">
+            Finding saved ·{" "}
+            <a href={withViewer(`/api/research/findings/${e.findingRef}.md`)} download>
+              Export Markdown
+            </a>
+          </p>
+        )}
+      </details>
     </li>
   );
 }
+
