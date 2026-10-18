@@ -27,7 +27,7 @@ function Progress({ value, state }: { value: number; state: string }) {
   );
 }
 
-function TelemetryLine({ device, now }: { device: DeviceView; now: number }) {
+export function TelemetryLine({ device, now }: { device: DeviceView; now: number }) {
   if (device.state === "offline") return <p className="card__meta card__meta--muted">Last seen {ago(device.lastSeenAt, now)}</p>;
   const t = device.telemetry;
   const parts: ReactNode[] = [];

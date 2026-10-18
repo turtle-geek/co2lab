@@ -1681,7 +1681,15 @@ code {
 /* Live screens keep their slot after a device finishes (no layout jumps). */
 .screen--done .phone__glass img,
 .screen--done .browser__glass img { filter: saturate(0.5) brightness(1.04); opacity: 0.75; transition: opacity 0.6s ease, filter 0.6s ease; }
-.screen__done { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+.screen__name { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; width: 100%; }
+.screen__name b, .screen__live { white-space: nowrap; }
+.screen__head { row-gap: 2px; }
+.screen__head .card__meta { margin: 0; width: 100%; font-size: 0.8rem; }
+.screen__finished { display: grid; place-items: center; align-content: center; gap: 6px; height: 100%; min-height: 140px; padding: 16px; text-align: center; background: var(--card); color: var(--ink); animation: screen-in 0.35s ease both; }
+.screen__finished-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--green-pill); color: var(--green-deep); }
+.screen__finished--failed .screen__finished-icon { background: var(--red-soft); color: var(--red); }
+.screen__finished-result { color: var(--ink-2); font-size: 0.85rem; }
+.phone__glass .screen__finished { min-height: 300px; }
 
 /* ---------- Agent steps (GitHub-checks style timeline) ---------- */
 .steps { list-style: none; margin: 4px 0 12px; padding: 0; display: grid; gap: 0; }
