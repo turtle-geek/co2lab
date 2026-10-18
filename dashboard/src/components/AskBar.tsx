@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Burn, DeviceView, RunView } from "@co2lab/shared";
 import { fmtUsd } from "../format";
-import { GRID_G_PER_KWH, deviceUse, fmtGrams } from "../footprint";
+import { deviceUse, embodied, fmtGrams, oldDevices } from "../footprint";
 
 const EXAMPLE = "Best lunch deals near UTSC today";
 
@@ -69,40 +69,90 @@ function fmtDuration(ms: number): string {
 /**
  * This request's footprint: the AI calls (Google's published per-prompt figures) plus the electricity
  * the old devices used on Ontario's grid (see footprint.ts), how long those devices worked, and AI cost.
+ * Pressing it opens a short explanation, including what it took to make the old devices.
  */
 export function BurnMeter({ run, devices }: { run: RunView | null; devices: DeviceView[] }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
   const b: Burn = run?.burn ?? { tokensIn: 0, tokensOut: 0, costUsd: 0, energyWh: 0, gCo2: 0 };
   const active = run && (run.status === "planning" || run.status === "running" || run.status === "merging");
   const use = deviceUse(run, devices);
   const total = b.gCo2 + use.g;
+  const made = oldDevices(devices)
+    .map(embodied)
+    .filter((e): e is NonNullable<typeof e> => !!e);
+  const madeKg = Math.round(made.reduce((n, e) => n + e.kg, 0));
+
   return (
-    <div className={active ? "burn burn--active" : "burn"} aria-label="Footprint of the current request">
-      <span className="burn__title">
-        <span className="burn__flame" aria-hidden>🔥</span> Burn
-        {run && <span className={`burn__status burn__status--${run.status}`}>{STATUS_TEXT[run.status]}</span>}
-      </span>
-      <span
-        className="burn__stat"
-        title={
-          `AI: ${fmtGrams(b.gCo2)} (${b.energyWh.toFixed(2)} Wh, Google's per-prompt figures). ` +
-          `Your devices: ${fmtGrams(use.g)} (about ${use.wh.toFixed(2)} Wh on Ontario's grid, ${GRID_G_PER_KWH} g CO₂e per kWh). Estimates.`
-        }
+    <div className="burn-wrap" ref={box}>
+      <button
+        type="button"
+        className={active ? "burn burn--active" : "burn"}
+        aria-expanded={open}
+        aria-controls="burn-info"
+        onClick={() => setOpen((o) => !o)}
       >
-        <span className="burn__label">Footprint</span>
-        <b>{fmtGrams(total)} CO₂e</b>
-      </span>
-      {use.devices > 0 && (
-        <span className="burn__stat burn__stat--green" title="Old devices that worked on this request, and for how long: hardware you already own instead of a new machine.">
-          <span className="burn__label">Old devices</span>
-          <b>
-            {use.devices} · {fmtDuration(use.ms)}
-          </b>
+        <span className="burn__title">
+          <span className="burn__flame" aria-hidden>🔥</span> Burn
+          {run && <span className={`burn__status burn__status--${run.status}`}>{STATUS_TEXT[run.status]}</span>}
         </span>
+        <span className="burn__stat">
+          <span className="burn__label">Footprint</span>
+          <b>{fmtGrams(total)} CO₂e</b>
+        </span>
+        {use.devices > 0 && (
+          <span className="burn__stat burn__stat--green">
+            <span className="burn__label">Old devices</span>
+            <b>
+              {use.devices} · {fmtDuration(use.ms)}
+            </b>
+          </span>
+        )}
+        <span className="burn__stat">
+          <span className="burn__label">AI cost</span>
+          <b>{fmtUsd(b.costUsd)}</b>
+        </span>
+        <span className={open ? "burn__more burn__more--open" : "burn__more"} aria-hidden>
+          ⌄
+        </span>
+      </button>
+      {open && (
+        <div className="burn-info" id="burn-info" role="dialog" aria-label="What Burn means">
+          <dl>
+            <dt>Footprint</dt>
+            <dd>
+              AI {fmtGrams(b.gCo2)} + your devices {fmtGrams(use.g)} on Ontario's grid.
+            </dd>
+            <dt>Old devices</dt>
+            <dd>{use.devices ? `${use.devices} worked ${fmtDuration(use.ms)} instead of a new machine.` : "None worked on this request yet."}</dd>
+            <dt>AI cost</dt>
+            <dd>The Gemini calls at list prices.</dd>
+            {madeKg > 0 && (
+              <>
+                <dt>Reused</dt>
+                <dd>
+                  Your {made.length} old device{made.length === 1 ? "" : "s"} took <b>{madeKg} kg CO₂e</b> to make. Using them avoids making new ones.
+                </dd>
+              </>
+            )}
+          </dl>
+          <p className="burn-info__note">Estimates. CO₂e: all greenhouse gases as CO₂.</p>
+        </div>
       )}
-      <span className="burn__stat" title="What the Gemini calls cost at list prices (estimate).">
-        <span className="burn__label">AI cost</span>
-        <b>{fmtUsd(b.costUsd)}</b>
-      </span>
     </div>
   );
 }

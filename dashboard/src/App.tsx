@@ -6,7 +6,6 @@ import { DeviceGrid } from "./components/DeviceGrid";
 import { AskBar, BurnMeter } from "./components/AskBar";
 import { LiveScreens, screenDevices } from "./components/LiveScreens";
 import { RunBanner } from "./components/TeamStrip";
-import { ReuseLine } from "./components/ReuseLine";
 import { Approvals, Results } from "./components/Results";
 import { PairDialog, ShareDialog } from "./components/Dialogs";
 import { Expired, Login } from "./components/Login";
@@ -197,7 +196,6 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
           ) : (
             <>
               <RunBanner run={run} onOpen={() => setTab("agent")} />
-              <ReuseLine devices={state.devices} />
               <DeviceGrid
                 devices={state.devices}
                 readOnly={readOnly}

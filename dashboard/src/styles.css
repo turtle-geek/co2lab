@@ -1880,6 +1880,23 @@ code {
 .battery__bolt { fill: #4a3020; }
 .thermo__fill { fill: var(--red); }
 
-/* Devices tab: embodied carbon of the paired old devices */
-.reuse { margin: 0 0 12px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--green-soft); color: var(--green-deep); font-size: 0.95rem; }
-.reuse b { color: var(--green-deep); }
+/* Burn is a button; pressing it opens a short explanation under it */
+.burn-wrap { position: relative; flex: 0 1 auto; display: flex; }
+.burn-wrap > .burn { flex: 1 1 auto; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.burn-wrap > .burn:hover { box-shadow: 0 0 0 2px var(--line) inset; }
+.burn-wrap > .burn:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.burn__more { color: var(--muted); font-size: 1rem; line-height: 1; transition: transform 0.2s ease; margin-left: -4px; }
+.burn__more--open { transform: rotate(180deg); }
+.burn-info {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
+  width: min(330px, calc(100vw - 32px));
+  background: var(--card); color: var(--ink); border-radius: var(--radius-sm);
+  box-shadow: 0 14px 36px rgba(40, 50, 40, 0.18); padding: 12px 14px;
+  font-size: 0.85rem; line-height: 1.35; animation: screen-in 0.18s ease both;
+}
+.burn-info dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; }
+.burn-info dt { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; padding-top: 2px; }
+.burn-info dd { margin: 0; }
+.burn-info__note { margin: 10px 0 0; color: var(--muted); font-size: 0.75rem; }
+@media (max-width: 700px) { .burn-info { left: 0; right: auto; } }
+@media (max-width: 560px) { .burn-wrap { flex-basis: 100%; } }
