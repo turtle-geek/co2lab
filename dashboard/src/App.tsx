@@ -11,9 +11,8 @@ import { Approvals, Results } from "./components/Results";
 import { PairDialog, ShareDialog } from "./components/Dialogs";
 import { Expired, Login } from "./components/Login";
 import { Lab } from "./labSlot";
-import { ComputeTab } from "./compute/ComputeTab";
 
-type Tab = "agent" | "devices" | "impact" | "compute" | "lab";
+type Tab = "agent" | "devices" | "impact" | "lab";
 
 export function App({ backend, viewerToken }: { backend: Backend; viewerToken: string | null }) {
   const role = viewerToken ? "viewer" : "owner";
@@ -114,8 +113,8 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
           <button className={tab === "agent" ? "tab tab--on" : "tab"} onClick={() => setTab("agent")}>
             Agent
           </button>
-          <button className={tab === "lab" || tab === "compute" || tab === "impact" ? "tab tab--on" : "tab"} onClick={() => setTab("impact")}>
-            Lab
+          <button className={tab === "lab" || tab === "impact" ? "tab tab--on" : "tab"} onClick={() => setTab("impact")}>
+            Impact
           </button>
         </nav>
         {!readOnly && (
@@ -136,24 +135,19 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
         )}
       </header>
 
-      {tab === "lab" || tab === "compute" || tab === "impact" ? (
+      {tab === "lab" || tab === "impact" ? (
         <main className="main">
-          {/* Lab = what the requests cost and saved (Impact), the Papiers research loop and the compute experiments. */}
-          <div className="seg lab-switch" role="tablist" aria-label="Lab sections">
+          {/* Impact = what the requests cost (by step, device, request) and the Papiers research loop that cuts it. */}
+          <div className="seg lab-switch" role="tablist" aria-label="Impact sections">
             <button role="tab" aria-selected={tab === "impact"} className={tab === "impact" ? "seg__on" : ""} onClick={() => setTab("impact")}>
               Impact
             </button>
             <button role="tab" aria-selected={tab === "lab"} className={tab === "lab" ? "seg__on" : ""} onClick={() => setTab("lab")}>
               Research
             </button>
-            <button role="tab" aria-selected={tab === "compute"} className={tab === "compute" ? "seg__on" : ""} onClick={() => setTab("compute")}>
-              Compute experiments
-            </button>
           </div>
           {tab === "impact" ? (
             <ImpactTab load={backend.aiUsage} runs={state.runs} devices={state.devices} />
-          ) : tab === "compute" ? (
-            <ComputeTab sets={state.computeSets} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
           ) : (
             <Lab experiments={state.experiments} defaultConfig={state.defaultConfig} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
           )}
