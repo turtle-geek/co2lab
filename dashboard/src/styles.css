@@ -1670,7 +1670,7 @@ code {
 /* Live screens keep their slot after a device finishes (no layout jumps). */
 .screen--done .phone__glass img,
 .screen--done .browser__glass img { filter: saturate(0.5) brightness(1.04); opacity: 0.75; transition: opacity 0.6s ease, filter 0.6s ease; }
-.screen__done { color: var(--green-deep); font-weight: 800; font-size: 0.8rem; }
+.screen__done { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
 
 /* ---------- Agent steps (GitHub-checks style timeline) ---------- */
 .steps { list-style: none; margin: 4px 0 12px; padding: 0; display: grid; gap: 0; }
@@ -1759,3 +1759,21 @@ code {
   .home > .results { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
   .home .device-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 }
+
+/* Agent tab: who is working (click opens Devices) */
+.team { display: flex; flex-wrap: wrap; gap: 8px; }
+.team__chip { display: inline-flex; align-items: center; gap: 8px; max-width: 320px; border: 1px solid var(--card-edge); background: var(--card); border-radius: 999px; padding: 6px 14px 6px 10px; font: inherit; font-size: 0.88rem; color: var(--ink); cursor: pointer; box-shadow: var(--shadow); transition: transform 0.15s ease; }
+.team__chip:hover { transform: translateY(-1px); }
+.team__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); flex: 0 0 auto; }
+.team__dot--working { background: var(--amber); box-shadow: 0 0 0 0 rgba(226, 160, 63, 0.6); animation: team-pulse 1.4s ease-out infinite; }
+.team__dot--offline, .team__dot--revoked { background: var(--muted); }
+.team__dot--resting, .team__dot--hot, .team__dot--error { background: var(--red); }
+.team__name { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.team__task { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@keyframes team-pulse { 70% { box-shadow: 0 0 0 7px rgba(226, 160, 63, 0); } 100% { box-shadow: 0 0 0 0 rgba(226, 160, 63, 0); } }
+
+/* Devices tab: a request is running */
+.runbanner { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--amber-soft); border-radius: var(--radius-sm); padding: 10px 14px; font: inherit; color: var(--ink); cursor: pointer; }
+.runbanner > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runbanner__go { font-weight: 800; color: var(--green-deep); white-space: nowrap; }
+.runbanner .step__icon { width: 18px; height: 18px; flex: 0 0 auto; }
