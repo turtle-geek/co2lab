@@ -109,10 +109,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
           <button className={tab === "devices" ? "tab tab--on" : "tab"} onClick={() => setTab("devices")}>
             Devices
           </button>
-          <button className={tab === "compute" ? "tab tab--on" : "tab"} onClick={() => setTab("compute")}>
-            Compute
-          </button>
-          <button className={tab === "lab" ? "tab tab--on" : "tab"} onClick={() => setTab("lab")}>
+          <button className={tab !== "devices" ? "tab tab--on" : "tab"} onClick={() => setTab("lab")}>
             Lab
           </button>
         </nav>
@@ -134,13 +131,22 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
         )}
       </header>
 
-      {tab === "compute" ? (
+      {tab !== "devices" ? (
         <main className="main">
-          <ComputeTab sets={state.computeSets} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
-        </main>
-      ) : tab === "lab" ? (
-        <main className="main">
-          <Lab experiments={state.experiments} defaultConfig={state.defaultConfig} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
+          {/* Lab = research on how the team works: the Papiers research loop and the compute experiments. */}
+          <div className="seg lab-switch" role="tablist" aria-label="Lab sections">
+            <button role="tab" aria-selected={tab === "lab"} className={tab === "lab" ? "seg__on" : ""} onClick={() => setTab("lab")}>
+              Research
+            </button>
+            <button role="tab" aria-selected={tab === "compute"} className={tab === "compute" ? "seg__on" : ""} onClick={() => setTab("compute")}>
+              Compute experiments
+            </button>
+          </div>
+          {tab === "compute" ? (
+            <ComputeTab sets={state.computeSets} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
+          ) : (
+            <Lab experiments={state.experiments} defaultConfig={state.defaultConfig} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
+          )}
         </main>
       ) : (
         <main className="main">

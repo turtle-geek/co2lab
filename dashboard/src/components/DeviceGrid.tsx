@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { DeviceView } from "@co2lab/shared";
 import { DeviceScene } from "./DeviceScene";
 import { STATE_LABEL, ago, useNow } from "../format";
@@ -69,7 +69,7 @@ export function TreeCard({ device, readOnly, onRevoke, frame }: { device: Device
       </div>
       <div className="tree-card__body">
         <div className="tree-card__title">
-          <h3>{device.name}</h3>
+          <h3 title={device.name}>{device.name}</h3>
           <span className={`pill pill--${device.state}`}>{STATE_LABEL[device.state]}</span>
         </div>
         <TelemetryLine device={device} now={now} />
@@ -92,10 +92,10 @@ export function TreeCard({ device, readOnly, onRevoke, frame }: { device: Device
         {sharesLine(device) && <p className="tree-card__shares">Shares: {sharesLine(device)}</p>}
         {!readOnly && device.state !== "revoked" && (
           confirming ? (
-            <span className="tree-card__confirm">
-              Revoke {device.name}?
+            <span className="tree-card__confirm" role="group" aria-label={`Revoke ${device.name}?`}>
+              Revoke?
               <button className="link-btn tree-card__yes" onClick={() => onRevoke(device.id)}>
-                Yes, revoke
+                Yes
               </button>
               <button className="link-btn" onClick={() => setConfirming(false)}>
                 Cancel
@@ -142,10 +142,18 @@ export function DeviceGrid({
   onRevoke(id: string): void;
   onAdd(): void;
 }) {
+  const { ordered, dragId, cardRef, dragProps } = useCardOrder(devices, !readOnly);
   return (
     <section className="device-grid" aria-label="Devices">
-      {devices.map((d) => (
-        <TreeCard key={d.id} device={d} readOnly={readOnly} onRevoke={onRevoke} frame={frames?.[d.id]} />
+      {ordered.map((d) => (
+        <div
+          key={d.id}
+          ref={(el) => cardRef(d.id, el)}
+          className={dragId === d.id ? "card-slot card-slot--dragging" : "card-slot"}
+          {...dragProps(d.id)}
+        >
+          <TreeCard device={d} readOnly={readOnly} onRevoke={onRevoke} frame={frames?.[d.id]} />
+        </div>
       ))}
       {!readOnly && <AddDeviceCard onClick={onAdd} disabled={!connected} />}
       {readOnly && devices.length === 0 && <p className="empty">No devices paired yet.</p>}
@@ -167,4 +175,95 @@ function sharesLine(d: DeviceView): string | null {
 function liveSrc(d: DeviceView, frame: LiveFrame | undefined, now: number): string | null {
   if (!frame || !(d.state === "working" || d.currentTask)) return null;
   return now - frame.at < 15_000 ? frame.src : null;
+}
+
+const ORDER_KEY = "co2lab.deviceOrder";
+
+function loadOrder(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(ORDER_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Drag a card onto another to move it there. Cards slide to their new places (FLIP: measure,
+ * reorder, then animate from the old position), and the order is remembered in this browser.
+ */
+function useCardOrder(devices: DeviceView[], enabled: boolean) {
+  const [order, setOrder] = useState<string[]>(loadOrder);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const els = useRef(new Map<string, HTMLElement>());
+  const before = useRef(new Map<string, DOMRect>());
+
+  const rank = (id: string) => {
+    const i = order.indexOf(id);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const ordered = [...devices].sort((a, b) => rank(a.id) - rank(b.id));
+
+  // FLIP: after a reorder, start each moved card at its old spot and let it glide to the new one.
+  useLayoutEffect(() => {
+    if (!before.current.size) return;
+    for (const [id, el] of els.current) {
+      const old = before.current.get(id);
+      if (!old) continue;
+      const now = el.getBoundingClientRect();
+      const dx = old.left - now.left;
+      const dy = old.top - now.top;
+      if (!dx && !dy) continue;
+      el.style.transition = "none";
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = "transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+        el.style.transform = "";
+      });
+    }
+    before.current.clear();
+  }, [order]);
+
+  function moveTo(id: string, targetId: string) {
+    if (id === targetId) return;
+    const ids = ordered.map((d) => d.id);
+    const from = ids.indexOf(id);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    for (const [k, el] of els.current) before.current.set(k, el.getBoundingClientRect());
+    ids.splice(to, 0, ids.splice(from, 1)[0]!);
+    setOrder(ids);
+    try {
+      localStorage.setItem(ORDER_KEY, JSON.stringify(ids));
+    } catch {
+      /* private mode: order just isn't remembered */
+    }
+  }
+
+  return {
+    ordered,
+    dragId,
+    cardRef: (id: string, el: HTMLElement | null) => {
+      if (el) els.current.set(id, el);
+      else els.current.delete(id);
+    },
+    dragProps: (id: string) =>
+      enabled
+        ? {
+            draggable: true,
+            onDragStart: (e: DragEvent<HTMLElement>) => {
+              setDragId(id);
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", id);
+            },
+            onDragEnter: (e: DragEvent<HTMLElement>) => {
+              e.preventDefault();
+              if (dragId && dragId !== id) moveTo(dragId, id);
+            },
+            onDragOver: (e: DragEvent<HTMLElement>) => e.preventDefault(),
+            onDrop: (e: DragEvent<HTMLElement>) => e.preventDefault(),
+            onDragEnd: () => setDragId(null),
+          }
+        : {},
+  };
 }

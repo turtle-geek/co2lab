@@ -70,18 +70,37 @@ export function BurnMeter({ run }: { run: RunView | null }) {
         <span className="burn__flame" aria-hidden>🔥</span> Burn
         {run && <span className={`burn__status burn__status--${run.status}`}>{STATUS_TEXT[run.status]}</span>}
       </span>
-      <span className="burn__stat">
-        <b>{fmtInt(b.tokensIn + b.tokensOut)}</b> tokens
+      <span className="burn__stat" title="What the Gemini calls for this request cost, at list prices (estimate)">
+        <span className="burn__label">AI cost</span>
+        <b>{fmtUsd(b.costUsd)}</b>
       </span>
-      <span className="burn__stat">
-        <b>{fmtUsd(b.costUsd)}</b> est.
+      <span className="burn__stat" title={`${b.energyWh.toFixed(2)} Wh of data-centre energy (estimate from Google's published per-prompt figures). A phone charge is about ${PHONE_CHARGE_WH} Wh.`}>
+        <span className="burn__label">Energy</span>
+        <b>{phoneCharges(b.energyWh)}</b>
       </span>
-      <span className="burn__stat">
-        <b>{b.energyWh.toFixed(2)}</b> Wh
+      <span className="burn__stat" title={`${b.gCo2.toFixed(2)} g CO₂ (estimate). A petrol car emits about ${CAR_G_PER_KM} g per km.`}>
+        <span className="burn__label">CO₂</span>
+        <b>{carDistance(b.gCo2)}</b>
       </span>
-      <span className="burn__stat">
-        <b>{b.gCo2.toFixed(2)}</b> gCO₂
+      <span className="burn__stat burn__stat--minor" title="Tokens: the amount of text and images the AI read and wrote">
+        {fmtInt(b.tokensIn + b.tokensOut)} tokens
       </span>
     </div>
   );
+}
+
+/** Everyday comparisons for the burn-o-meter (rough, labeled as estimates in the tooltips). */
+const PHONE_CHARGE_WH = 12;
+const CAR_G_PER_KM = 150;
+
+function phoneCharges(wh: number): string {
+  if (wh <= 0) return "0";
+  const n = wh / PHONE_CHARGE_WH;
+  return n < 0.1 ? `${Math.max(1, Math.round(n * 100))}% of a phone charge` : `${n.toFixed(1)} phone charges`;
+}
+
+function carDistance(g: number): string {
+  if (g <= 0) return "0";
+  const m = (g / CAR_G_PER_KM) * 1000;
+  return m < 1000 ? `≈ ${Math.max(1, Math.round(m))} m of driving` : `≈ ${(m / 1000).toFixed(1)} km of driving`;
 }

@@ -1711,3 +1711,41 @@ code {
 .suggest__chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 0.9rem; cursor: pointer; transition: background 0.2s ease, transform 0.15s ease; }
 .suggest__chip:hover:not(:disabled) { background: var(--green-soft); transform: translateY(-1px); }
 .suggest__chip:disabled { opacity: 0.5; cursor: default; }
+
+/* Burn-o-meter: labeled, human comparisons */
+.burn__stat { display: inline-flex; flex-direction: column; line-height: 1.15; }
+.burn__label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; }
+.burn__stat--minor { color: var(--muted); font-size: 0.82rem; justify-content: flex-end; }
+
+/* Cards: the state tag stays on the name's line (long names truncate); Revoke confirm stays one line. */
+.tree-card__title { flex-wrap: nowrap; }
+.tree-card__title h3 { flex: 1 1 auto; min-width: 0; }
+.tree-card__title .pill { flex: 0 0 auto; }
+.tree-card__confirm { flex-wrap: nowrap; white-space: nowrap; min-height: 1.4em; animation: confirm-in 0.18s ease both; }
+.tree-card__revoke { min-height: 1.4em; }
+@keyframes confirm-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+
+/* Revoked: leaves leave the crown and drift to the ground (staggered via inline animation-delay). */
+.tree__leaf-fall { opacity: 0; transform-box: fill-box; transform-origin: center; animation: leaf-fall 3.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite; }
+.tree__leaf-fall path { fill: #b49466; stroke: #7d6446; stroke-width: 1; }
+@keyframes leaf-fall {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  10% { opacity: 1; }
+  35% { transform: translate(-7px, 26px) rotate(55deg); }
+  65% { transform: translate(6px, 56px) rotate(130deg); }
+  88% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-2px, 80px) rotate(190deg); }
+}
+@media (prefers-reduced-motion: reduce) { .tree__leaf-fall { animation: none; opacity: 0.9; } }
+
+/* Draggable device cards */
+.device-grid > .card-slot { display: block; will-change: transform; }
+.device-grid > .card-slot[draggable="true"] { cursor: grab; }
+.card-slot--dragging { opacity: 0.55; transition: opacity 0.15s ease; }
+.card-slot--dragging .tree-card { box-shadow: 0 12px 30px rgba(40, 50, 40, 0.18); }
+.card-slot > .tree-card { height: 100%; }
+
+/* Lab section switch (Research | Compute experiments) */
+.lab-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--card); margin-bottom: 12px; align-self: flex-start; }
+.lab-switch button { border: 0; background: transparent; padding: 8px 16px; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; }
+.lab-switch button.seg__on { background: var(--green-pill); color: var(--green-deep); }

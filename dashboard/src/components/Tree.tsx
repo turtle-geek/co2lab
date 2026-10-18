@@ -101,9 +101,9 @@ const CROWN: Record<DeviceState, string> = {
   resting: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
   hot: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
   error: "M100 30 C122 29 141 38 151 55 C160 70 160 92 153 108 C145 127 125 138 100 138 C74 138 54 128 46 110 C39 94 40 70 49 55 C59 39 78 31 100 30Z",
-  // revoked: shrunken and withered
+  // revoked: same size as the other moods, but sagging (flatter top, drooping sides); colour does the withering
   revoked:
-    "M58 104 C50 76 70 58 92 60 C104 50 128 56 136 70 C152 76 154 98 142 108 C140 124 120 130 108 124 C96 132 76 130 70 120 C58 120 54 112 58 104Z",
+    "M100 40 C123 39 142 48 151 64 C159 79 160 98 154 113 C146 131 125 140 100 140 C75 140 54 131 46 113 C40 98 41 79 49 64 C58 48 77 41 100 40Z",
 };
 
 /** Trunk that is narrow under the crown and flares out at the base. */
@@ -168,10 +168,22 @@ export function Tree({ mood, placement }: { mood: DeviceState; placement?: Place
         </g>
       )}
       {mood === "revoked" && (
+        // Leaves start on the crown's edge and drift down to the ground one after another.
         <g className="tree__falling">
-          <ellipse cx="60" cy="150" rx="6" ry="3.5" transform="rotate(30 60 150)" />
-          <ellipse cx="146" cy="160" rx="6" ry="3.5" transform="rotate(-20 146 160)" />
-          <ellipse cx="124" cy="178" rx="5" ry="3" transform="rotate(10 124 178)" />
+          {[
+            [56, 96, "0s"],
+            [146, 88, "0.7s"],
+            [118, 128, "1.4s"],
+            [78, 124, "2.1s"],
+            [140, 116, "2.8s"],
+          ].map(([x, y, delay], i) => (
+            <g key={i} className="tree__leaf-fall" style={{ animationDelay: delay as string }}>
+              <path
+                d={`M${x} ${y} c4 -5 11 -5 13 0 c-3 5 -10 5 -13 0z`}
+                style={{ transformOrigin: `${(x as number) + 6}px ${y}px` }}
+              />
+            </g>
+          ))}
         </g>
       )}
     </svg>
