@@ -11,8 +11,8 @@ const RANGES = [
   { hours: 24, label: "Last 24 h" },
   { hours: 24 * 7, label: "Last 7 days" },
 ];
-/** Single-series bars: the AI colour (validated against the light chart surface). */
-const BAR = "#a0582a";
+/** Single-series bars in the app's leaf green (passes contrast against the white track). */
+const BAR = "var(--green)";
 
 const KIND: Record<string, { label: string; lever: string }> = {
   plan: { label: "Planning the tasks", lever: "Fewer re-plans would cut it most." },
