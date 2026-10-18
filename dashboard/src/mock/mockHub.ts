@@ -376,6 +376,9 @@ export class MockHub {
         willFailAt: failPopeyes && cap === "app:popeyes" ? 2 : null,
       }));
       run.view.status = "running";
+      // Mock planner reasoning, so the dashboard shows the plan summary like the real hub does.
+      run.view.plan =
+        "The request is about lunch deals, so I will use every deal source with an online device. The Galaxy A54 has the Tim Hortons, McDonald's and Popeyes apps signed in, so it reads their in-app offers. The Dragonfly browses RedFlagDeals for local food deals at the same time.";
       this.schedule();
       this.pushRun(run);
     }, 1500);

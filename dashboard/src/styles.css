@@ -1740,8 +1740,8 @@ code {
 
 /* Draggable device cards */
 .device-grid > .card-slot { display: block; will-change: transform; }
-.device-grid > .card-slot[draggable="true"] { cursor: grab; }
-.card-slot--dragging { position: relative; z-index: 2; transform: scale(1.03); transition: transform 0.15s ease; }
+
+.card-slot--dragging { position: relative; z-index: 5; cursor: grabbing; user-select: none; }
 .card-slot--dragging .tree-card { box-shadow: 0 18px 40px rgba(40, 50, 40, 0.22); }
 .card-slot > .tree-card { height: 100%; }
 
@@ -1802,3 +1802,15 @@ code {
 .steps-fold:not([open]) .steps-fold__open::after { content: " ▾"; }
 .step__icon svg { display: block; }
 .answer { animation: rise 0.4s ease both; }
+.device-grid { position: relative; }
+.device-grid > .card-slot { cursor: grab; }
+
+/* Plan step: a visible summary, and its tasks nested as sub-steps */
+.step__summary { margin-top: 2px; color: var(--ink); font-size: 0.9rem; line-height: 1.4; }
+.step__summary p { margin: 0; }
+.steps--sub { margin: 6px 0 0; padding-left: 4px; border-left: 2px solid var(--line); }
+.steps--sub > .step { padding-left: 10px; grid-template-columns: 20px 1fr; }
+.steps--sub > .step::before { display: none; }
+.steps--sub .step__icon { width: 20px; height: 20px; }
+.steps--sub .step__icon svg { width: 13px; height: 13px; }
+.steps--sub .step__title { font-weight: 700; }

@@ -137,7 +137,6 @@ function Steps({ run, deviceName }: { run: RunView; deviceName: (id: string | nu
   const rounds = new Map<number, SubtaskView[]>();
   for (const s of run.subtasks) rounds.set(s.wave ?? 1, [...(rounds.get(s.wave ?? 1) ?? []), s]);
   const plans = (run.plan ?? "").split(/\n\n+/).filter(Boolean);
-  const active = run.status === "running" || run.status === "planning" || run.status === "merging";
   const thinkingAgain = run.status === "running" && general && run.subtasks.every((s) => s.status !== "queued" && s.status !== "running");
 
   const taskRow = (s: SubtaskView) => {
@@ -161,46 +160,63 @@ function Steps({ run, deviceName }: { run: RunView; deviceName: (id: string | nu
     );
   };
 
+  /** The planner's reasoning for a round, shortened to its first sentences, with the rest behind "more". */
+  const PlanText = ({ text, subs }: { text?: string; subs: SubtaskView[] }) => {
+    if (!text) {
+      // Deal-only planner (or an older hub): say what was chosen instead.
+      const byDevice = new Map<string, string[]>();
+      for (const s of subs) {
+        const where = deviceName(s.deviceId) ?? "a free device";
+        byDevice.set(where, [...(byDevice.get(where) ?? []), s.label ?? capabilityLabel(s.capability)]);
+      }
+      if (!byDevice.size) return null;
+      return <p className="step__summary">Check {[...byDevice.entries()].map(([d, l]) => `${l.join(", ")} on ${d}`).join("; ")}.</p>;
+    }
+    const clean = text.replace(/^Follow-up:s*/, "");
+    const short = clean.split(/(?<=[.!?])s+/).slice(0, 2).join(" ");
+    return (
+      <div className="step__summary">
+        <p>{short}</p>
+        {short.length < clean.length && (
+          <details className="step__why">
+            <summary>more</summary>
+            <p>{clean}</p>
+          </details>
+        )}
+      </div>
+    );
+  };
+
+  const roundEntries = [...rounds.entries()];
   return (
     <ol className="steps" aria-label="What the agents are doing">
-      <Step
-        state={planning ? "running" : run.subtasks.length || run.plan ? "done" : run.status === "failed" ? "failed" : "done"}
-        title={planning ? "Planning with Gemini" : "Gemini made a plan"}
-        meta={planning ? secs(run.createdAt, now) : `${run.subtasks.filter((s) => (s.wave ?? 1) === 1).length} task(s)`}
-        detail={
-          planning ? (
-            <span className="thinking">
-              Reading your request and what each device has (apps, games, browser)<span className="thinking__dots" aria-hidden />
-            </span>
-          ) : plans[0] ? (
-            <details className="step__why">
-              <summary>Show the plan</summary>
-              {plans[0]}
-            </details>
-          ) : null
-        }
-      />
-      {[...rounds.entries()].map(([wave, subs]) => (
-        <li key={`w${wave}`} className="steps__group">
-          {wave > 1 && (
-            <ol className="steps steps--nested">
-              <Step
-                state="done"
-                title={`Follow-up ${wave - 1}`}
-                detail={
-                  plans[wave - 1] ? (
-                    <details className="step__why">
-                      <summary>Show why</summary>
-                      {plans[wave - 1]!.replace(/^Follow-up:\s*/, "")}
-                    </details>
-                  ) : null
-                }
-              />
-            </ol>
-          )}
-          <ol className="steps steps--nested">{subs.map(taskRow)}</ol>
-        </li>
-      ))}
+      {roundEntries.length === 0 || planning ? (
+        <Step
+          state={planning ? "running" : run.status === "failed" ? "failed" : "done"}
+          title={planning ? "Planning with Gemini" : "Gemini made a plan"}
+          meta={planning ? secs(run.createdAt, now) : undefined}
+          detail={
+            planning ? (
+              <span className="thinking">
+                Reading your request and what each device has (apps, games, browser)<span className="thinking__dots" aria-hidden />
+              </span>
+            ) : undefined
+          }
+        />
+      ) : (
+        roundEntries.map(([wave, subs]) => (
+          // Each planning round is a step; the tasks it created are its sub-steps.
+          <Step
+            key={`w${wave}`}
+            state="done"
+            title={wave === 1 ? "Gemini made a plan" : `Gemini added follow-up ${wave - 1}`}
+            meta={`${subs.length} task${subs.length === 1 ? "" : "s"}`}
+            detail={<PlanText text={plans[wave - 1]} subs={subs} />}
+          >
+            <ol className="steps steps--sub">{subs.map(taskRow)}</ol>
+          </Step>
+        ))
+      )}
       {thinkingAgain && (
         <Step
           state="running"
@@ -216,8 +232,16 @@ function Steps({ run, deviceName }: { run: RunView; deviceName: (id: string | nu
         <Step
           state={run.status === "merging" ? "running" : run.status === "done" ? "done" : run.status === "failed" ? "failed" : "waiting"}
           title={general ? "Write the answer" : "Rank the deals"}
-          meta={run.status === "done" && run.finishedAt ? `total ${secs(run.createdAt, run.finishedAt)}` : active ? undefined : undefined}
-          detail={run.status === "failed" ? run.error ?? "no task finished" : run.status === "merging" ? <span className="thinking">Combining what the devices found<span className="thinking__dots" aria-hidden /></span> : undefined}
+          meta={run.status === "done" && run.finishedAt ? `total ${secs(run.createdAt, run.finishedAt)}` : undefined}
+          detail={
+            run.status === "failed" ? (
+              run.error ?? "no task finished"
+            ) : run.status === "merging" ? (
+              <span className="thinking">
+                Combining what the devices found<span className="thinking__dots" aria-hidden />
+              </span>
+            ) : undefined
+          }
         />
       )}
     </ol>

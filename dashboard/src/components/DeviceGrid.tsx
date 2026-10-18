@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import type { DeviceView } from "@co2lab/shared";
 import { DeviceScene } from "./DeviceScene";
 import { STATE_LABEL, ago, useNow } from "../format";
@@ -179,12 +179,6 @@ function liveSrc(d: DeviceView, frame: LiveFrame | undefined, now: number): stri
 
 const ORDER_KEY = "co2lab.deviceOrder";
 
-/** A 1x1 transparent image used as the drag preview. */
-const BLANK_DRAG_IMAGE = (() => {
-  const img = new Image();
-  img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-  return img;
-})();
 
 function loadOrder(): string[] {
   try {
@@ -196,25 +190,43 @@ function loadOrder(): string[] {
 }
 
 /**
- * Drag a card onto another to move it there. Cards slide to their new places (FLIP: measure,
- * reorder, then animate from the old position), and the order is remembered in this browser.
+ * Free dragging: the card follows the pointer anywhere (mouse or touch); when it is over another card
+ * they swap, and the other cards slide to their new places (FLIP). The order is remembered here.
  */
 function useCardOrder(devices: DeviceView[], enabled: boolean) {
   const [order, setOrder] = useState<string[]>(loadOrder);
   const [dragId, setDragId] = useState<string | null>(null);
   const els = useRef(new Map<string, HTMLElement>());
   const before = useRef(new Map<string, DOMRect>());
+  const drag = useRef<{ id: string; pointerId: number; startX: number; startY: number; grabX: number; grabY: number; active: boolean; lastX: number; lastY: number } | null>(null);
 
   const rank = (id: string) => {
     const i = order.indexOf(id);
     return i === -1 ? Number.MAX_SAFE_INTEGER : i;
   };
   const ordered = [...devices].sort((a, b) => rank(a.id) - rank(b.id));
+  const orderedRef = useRef(ordered);
+  orderedRef.current = ordered;
 
-  // FLIP: after a reorder, start each moved card at its old spot and let it glide to the new one.
+  /** Moves the dragged card so its grab point stays under the pointer, whatever slot it is in now. */
+  const follow = (id: string, x: number, y: number) => {
+    const el = els.current.get(id);
+    const d = drag.current;
+    if (!el || !d) return;
+    const grid = el.offsetParent?.getBoundingClientRect();
+    if (!grid) return;
+    el.style.transition = "none";
+    el.style.transform = `translate(${x - grid.left - d.grabX - el.offsetLeft}px, ${y - grid.top - d.grabY - el.offsetTop}px) scale(1.03)`;
+  };
+
+  // FLIP: after a swap, start each moved card (except the one in your hand) at its old spot and let it glide.
   useLayoutEffect(() => {
-    if (!before.current.size) return;
+    const d = drag.current;
     for (const [id, el] of els.current) {
+      if (d?.active && id === d.id) {
+        follow(id, d.lastX, d.lastY);
+        continue;
+      }
       const old = before.current.get(id);
       if (!old) continue;
       const now = el.getBoundingClientRect();
@@ -224,7 +236,7 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
       el.style.transition = "none";
       el.style.transform = `translate(${dx}px, ${dy}px)`;
       requestAnimationFrame(() => {
-        el.style.transition = "transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+        el.style.transition = "transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)";
         el.style.transform = "";
       });
     }
@@ -233,17 +245,40 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
 
   function moveTo(id: string, targetId: string) {
     if (id === targetId) return;
-    const ids = ordered.map((d) => d.id);
+    const ids = orderedRef.current.map((d) => d.id);
     const from = ids.indexOf(id);
     const to = ids.indexOf(targetId);
     if (from < 0 || to < 0) return;
-    for (const [k, el] of els.current) before.current.set(k, el.getBoundingClientRect());
+    for (const [k, el] of els.current) if (k !== id) before.current.set(k, el.getBoundingClientRect());
     ids.splice(to, 0, ids.splice(from, 1)[0]!);
     setOrder(ids);
     try {
       localStorage.setItem(ORDER_KEY, JSON.stringify(ids));
     } catch {
       /* private mode: order just isn't remembered */
+    }
+  }
+
+  /** The other card under the pointer, if any (the dragged card itself is ignored). */
+  function cardAt(x: number, y: number, self: string): string | null {
+    for (const [id, el] of els.current) {
+      if (id === self) continue;
+      const r = el.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return id;
+    }
+    return null;
+  }
+
+  function end() {
+    const d = drag.current;
+    drag.current = null;
+    setDragId(null);
+    if (!d) return;
+    const el = els.current.get(d.id);
+    if (el && d.active) {
+      // settle into the new slot
+      el.style.transition = "transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+      el.style.transform = "";
     }
   }
 
@@ -257,21 +292,30 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
     dragProps: (id: string) =>
       enabled
         ? {
-            draggable: true,
-            onDragStart: (e: DragEvent<HTMLElement>) => {
-              setDragId(id);
-              e.dataTransfer.effectAllowed = "move";
-              e.dataTransfer.setData("text/plain", id);
-              // Hide the browser's see-through drag copy: the real card stays solid and slides into place.
-              e.dataTransfer.setDragImage(BLANK_DRAG_IMAGE, 0, 0);
+            onPointerDown: (e: PointerEvent<HTMLElement>) => {
+              if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input")) return;
+              const r = e.currentTarget.getBoundingClientRect();
+              drag.current = { id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, grabX: e.clientX - r.left, grabY: e.clientY - r.top, active: false, lastX: e.clientX, lastY: e.clientY };
             },
-            onDragEnter: (e: DragEvent<HTMLElement>) => {
+            onPointerMove: (e: PointerEvent<HTMLElement>) => {
+              const d = drag.current;
+              if (!d || d.id !== id || d.pointerId !== e.pointerId) return;
+              d.lastX = e.clientX;
+              d.lastY = e.clientY;
+              if (!d.active) {
+                // a few pixels of movement before it counts as a drag, so clicks still work
+                if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return;
+                d.active = true;
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setDragId(id);
+              }
               e.preventDefault();
-              if (dragId && dragId !== id) moveTo(dragId, id);
+              follow(id, e.clientX, e.clientY);
+              const over = cardAt(e.clientX, e.clientY, id);
+              if (over) moveTo(id, over);
             },
-            onDragOver: (e: DragEvent<HTMLElement>) => e.preventDefault(),
-            onDrop: (e: DragEvent<HTMLElement>) => e.preventDefault(),
-            onDragEnd: () => setDragId(null),
+            onPointerUp: end,
+            onPointerCancel: end,
           }
         : {},
   };
