@@ -1866,3 +1866,14 @@ code {
 .screen__task { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .screen__live { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .screen__caption { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 0; height: 1.35em; line-height: 1.35; }
+
+/* Telemetry icons, drawn like the devices: brown outline, cream body */
+.meta-item { display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
+.meta-icon { flex: 0 0 auto; overflow: visible; }
+.battery__case, .thermo__glass { fill: #f1e5cf; stroke: #6f4b2e; stroke-width: 1.6; stroke-linejoin: round; }
+.battery__cap { fill: #6f4b2e; }
+.battery__fill { fill: var(--green); transition: y 0.6s ease, height 0.6s ease; }
+.battery--mid .battery__fill { fill: var(--amber); }
+.battery--low .battery__fill { fill: var(--red); }
+.battery__bolt { fill: #ffd84a; stroke: #6f4b2e; stroke-width: 0.9; stroke-linejoin: round; }
+.thermo__fill { fill: var(--red); }
