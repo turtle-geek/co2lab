@@ -40,8 +40,14 @@ export function AskBar({
         aria-label="Ask your devices"
         enterKeyHint="go"
       />
-      <button className="btn btn--primary ask__go" disabled={!connected || busy}>
-        {busy ? "Sending…" : "Ask"}
+      <button className="btn btn--primary ask__go" disabled={!connected || busy} aria-label={busy ? "Sending" : "Ask"} title="Ask">
+        {busy ? (
+          <span className="spinner ask__spin" aria-hidden />
+        ) : (
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+            <path d="M5 12h13M12.5 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
       </button>
       {onCancel && (
         <button type="button" className="btn ask__cancel" disabled={!connected} onClick={onCancel}>

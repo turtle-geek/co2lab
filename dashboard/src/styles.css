@@ -1953,3 +1953,8 @@ code {
 .impact__row--on { background: var(--green-pill) !important; box-shadow: inset 3px 0 0 var(--green); }
 .impact__scope { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 8px; padding: 6px 10px; border-radius: 10px; background: var(--green-pill); color: var(--green-deep); font-size: 0.88rem; }
 .impact__scope b { color: var(--ink); }
+
+/* Ask: a round send button with an arrow */
+.ask__go { flex: 0 0 auto; width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+.ask__go svg { display: block; }
+.ask__spin { width: 18px; height: 18px; border-color: rgba(255, 255, 255, 0.45); border-top-color: #fff; }
