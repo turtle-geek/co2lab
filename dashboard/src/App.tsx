@@ -5,7 +5,7 @@ import { currentRun } from "./state/hubState";
 import { DeviceGrid } from "./components/DeviceGrid";
 import { AskBar, BurnMeter } from "./components/AskBar";
 import { LiveScreens } from "./components/LiveScreens";
-import { RunBanner, TeamStrip } from "./components/TeamStrip";
+import { RunBanner } from "./components/TeamStrip";
 import { Approvals, Results } from "./components/Results";
 import { PairDialog, ShareDialog } from "./components/Dialogs";
 import { Expired, Login } from "./components/Login";
@@ -18,7 +18,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
   const role = viewerToken ? "viewer" : "owner";
   const hub = useHub(backend, role, viewerToken ?? undefined);
   const { state, status } = hub;
-  const [tab, setTab] = useState<Tab>("agent");
+  const [tab, setTab] = useState<Tab>("devices");
   // https://<hub>/approve?code=XXXX-XXXX (printed by the worker installer) opens the add-device dialog.
   const [approveCode] = useState(() => (location.pathname === "/approve" ? new URLSearchParams(location.search).get("code") ?? "" : null));
   const [pairOpen, setPairOpen] = useState(approveCode !== null);
@@ -107,11 +107,11 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
           {DevPanel && <span className="badge badge--mock">Mock hub</span>}
         </div>
         <nav className="tabs" aria-label="Sections">
-          <button className={tab === "agent" ? "tab tab--on" : "tab"} onClick={() => setTab("agent")}>
-            Agent
-          </button>
           <button className={tab === "devices" ? "tab tab--on" : "tab"} onClick={() => setTab("devices")}>
             Devices
+          </button>
+          <button className={tab === "agent" ? "tab tab--on" : "tab"} onClick={() => setTab("agent")}>
+            Agent
           </button>
           <button className={tab === "lab" || tab === "compute" ? "tab tab--on" : "tab"} onClick={() => setTab("lab")}>
             Lab
@@ -152,42 +152,54 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             <Lab experiments={state.experiments} defaultConfig={state.defaultConfig} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
           )}
         </main>
-      ) : tab === "agent" ? (
-        <main className="main">
-          {/* Agent: ask, watch the plan and steps, read the answer. The team strip shows who is working. */}
-          <div className="ask-row">
-            <AskBar readOnly={readOnly} connected={connected} busy={busy} onAsk={hub.createRun} />
-            <BurnMeter run={run} />
-          </div>
-          <TeamStrip devices={state.devices} onOpen={() => setTab("devices")} />
-          <Results
-            run={run}
-            devices={state.devices}
-            readOnly={readOnly}
-            connected={connected}
-            onShare={(runId, target) => hub.send({ type: "share.request", runId, target })}
-            onAsk={hub.createRun}
-          >
-            <Approvals
-              approvals={state.approvals}
-              readOnly={readOnly}
-              connected={connected}
-              onRespond={(id, approve) => hub.send({ type: "approval.respond", approvalId: id, approve })}
-            />
-          </Results>
-        </main>
       ) : (
         <main className="main">
-          {/* Devices: the trees (health, mood) and a permanent screen per device. */}
-          <RunBanner run={run} onOpen={() => setTab("agent")} />
-          <DeviceGrid
-            devices={state.devices}
-            readOnly={readOnly}
-            connected={connected}
-            onAdd={openPair}
-            onRevoke={(id) => hub.send({ type: "device.revoke", deviceId: id })}
-          />
-          <LiveScreens devices={state.devices} frames={state.frames} steps={state.steps} />
+          {/* Ask and Burn sit on top of both Devices and Agent, so switching tabs keeps them in place. */}
+          <div className="ask-row">
+            <AskBar
+              readOnly={readOnly}
+              connected={connected}
+              busy={busy}
+              onAsk={(prompt) => {
+                const ok = hub.createRun(prompt);
+                if (ok) setTab("agent");
+                return ok;
+              }}
+            />
+            <BurnMeter run={run} />
+          </div>
+          {tab === "agent" ? (
+            // Agent: the steps and answer next to the screens of the devices doing the work.
+            <div className="agent">
+              <Results
+                run={run}
+                devices={state.devices}
+                readOnly={readOnly}
+                connected={connected}
+                onShare={(runId, target) => hub.send({ type: "share.request", runId, target })}
+                onAsk={hub.createRun}
+              >
+                <Approvals
+                  approvals={state.approvals}
+                  readOnly={readOnly}
+                  connected={connected}
+                  onRespond={(id, approve) => hub.send({ type: "approval.respond", approvalId: id, approve })}
+                />
+              </Results>
+              <LiveScreens devices={state.devices} frames={state.frames} steps={state.steps} />
+            </div>
+          ) : (
+            <>
+              <RunBanner run={run} onOpen={() => setTab("agent")} />
+              <DeviceGrid
+                devices={state.devices}
+                readOnly={readOnly}
+                connected={connected}
+                onAdd={openPair}
+                onRevoke={(id) => hub.send({ type: "device.revoke", deviceId: id })}
+              />
+            </>
+          )}
         </main>
       )}
 

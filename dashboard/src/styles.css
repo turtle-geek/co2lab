@@ -1777,3 +1777,10 @@ code {
 .runbanner > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .runbanner__go { font-weight: 800; color: var(--green-deep); white-space: nowrap; }
 .runbanner .step__icon { width: 18px; height: 18px; flex: 0 0 auto; }
+
+/* Agent tab: steps + answer on the left, the devices' screens on the right. */
+.agent { display: grid; gap: 16px; align-items: start; }
+@media (min-width: 1000px) {
+  .agent { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+  .agent > .live { position: sticky; top: 12px; }
+}

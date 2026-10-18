@@ -32,7 +32,7 @@ export function AskBar({
         value={text}
         maxLength={500}
         onChange={(e) => setText(e.target.value)}
-        placeholder={`Ask your devices, e.g. ${EXAMPLE}`}
+        placeholder="Ask your devices, e.g. lunch deals near UTSC"
         aria-label="Ask your devices"
         enterKeyHint="go"
       />
@@ -81,31 +81,26 @@ export function BurnMeter({ run }: { run: RunView | null }) {
   return (
     <div className={active ? "burn burn--active" : "burn"} aria-label="Burn-o-meter for the current request">
       <span className="burn__title">
-        <span className="burn__flame" aria-hidden>🔥</span> Burn-o-meter
+        <span className="burn__flame" aria-hidden>🔥</span> Burn
         {run && <span className={`burn__status burn__status--${run.status}`}>{STATUS_TEXT[run.status]}</span>}
       </span>
       <span
         className="burn__stat burn__stat--green"
-        title="Time your old devices spent working on this request: work done on hardware you already own instead of new machines or extra cloud servers."
+        title={`Time your old devices worked on this request${work.devices ? ` (${work.devices} device${work.devices === 1 ? "" : "s"})` : ""}: work on hardware you already own instead of new machines.`}
       >
-        <span className="burn__label">Old devices at work</span>
+        <span className="burn__label">Old devices</span>
         <b>{fmtDuration(work.ms)}</b>
-        <span className="burn__sub">{work.devices ? `on ${work.devices} reused device${work.devices === 1 ? "" : "s"}` : "none yet"}</span>
       </span>
       <span
         className="burn__stat"
-        title={`Data-centre energy for the AI calls: ${b.energyWh.toFixed(2)} Wh (estimate from Google's published per-prompt figures).`}
+        title={`AI energy: ${b.energyWh.toFixed(2)} Wh, about a 10 W LED bulb for that long; ${b.gCo2.toFixed(1)} g CO₂ (estimates from Google's published per-prompt figures).`}
       >
-        <span className="burn__label">AI energy</span>
-        <b>{b.energyWh > 0 ? `LED bulb for ${ledTime(b.energyWh)}` : "0"}</b>
-        <span className="burn__sub">
-          {b.energyWh.toFixed(1)} Wh · {b.gCo2.toFixed(1)} g CO₂ (est.)
-        </span>
+        <span className="burn__label">Energy</span>
+        <b>{b.energyWh > 0 ? `💡 ${ledTime(b.energyWh)}` : "0"}</b>
       </span>
-      <span className="burn__stat" title="What the Gemini calls cost at list prices (estimate). Tokens are the text and images the AI read and wrote.">
+      <span className="burn__stat" title={`What the Gemini calls cost at list prices (estimate): ${fmtInt(b.tokensIn + b.tokensOut)} tokens.`}>
         <span className="burn__label">AI cost</span>
         <b>{fmtUsd(b.costUsd)}</b>
-        <span className="burn__sub">{fmtInt(b.tokensIn + b.tokensOut)} tokens</span>
       </span>
     </div>
   );
