@@ -122,6 +122,10 @@ export class RunManager {
   private general = new Map<string, GeneralTask>();
   /** The agent planner's reasoning per run, shown on the dashboard. */
   private plans = new Map<string, string>();
+  /** Planner's dashboard labels: run title, round names, task names. */
+  private titles = new Map<string, string>();
+  private stages = new Map<string, string[]>();
+  private names = new Map<string, string>();
   /** Planning round per subtask (shown as groups on the dashboard). */
   private waves = new Map<string, number>();
   /** Runs planned by the general agent (not deal-only); wave 2 = follow-up already planned. */
@@ -165,12 +169,16 @@ export class RunManager {
         findings: this.general.get(s.id)?.summary ?? null,
         label: s.label,
         wave: this.waves.get(s.id) ?? 1,
+        name: this.names.get(s.id) ?? s.label.replace(/^(Web|App): /, ""),
+        tool: s.source === "agent" ? (this.general.get(s.id)?.tool ?? "web") : "deals",
         startedAt: s.startedAt,
         finishedAt: s.finishedAt,
       })),
       ranked: r.ranked,
       answer: r.answer ?? null,
       plan: this.plans.get(r.id) ?? null,
+      title: this.titles.get(r.id) ?? null,
+      stages: this.stages.get(r.id) ?? [],
       burn: r.burn,
       error: r.error,
       createdAt: r.createdAt,
@@ -302,6 +310,8 @@ export class RunManager {
     });
     log.info(`run ${run.id} agent plan: ${plan.reasoning.slice(0, 200)}`);
     this.plans.set(run.id, plan.reasoning);
+    this.titles.set(run.id, plan.title);
+    this.stages.set(run.id, [plan.stage]);
     if (!deals.length && !general.length)
       return this.failRun(run, plan.cannotDo ?? (dropped.length ? `no online device can ${dropped.join("; ")}` : "the planner found nothing the devices can do"));
     if (!general.length) return this.startSubtasks(run, deals, "agent (deals)");
@@ -319,7 +329,7 @@ export class RunManager {
 
   /** Keeps only tasks some online device can run; returns why the others were dropped. */
   private validate(tasks: PlannedTask[]) {
-    const deals: { id: PlanId; goal: string }[] = [];
+    const deals: { id: PlanId; goal: string; label?: string }[] = [];
     const general: PlannedTask[] = [];
     const dropped: string[] = [];
     const seen = new Set<string>();
@@ -331,7 +341,7 @@ export class RunManager {
       if (t.tool === "deals") {
         if (!t.source || seen.has(t.source)) continue;
         seen.add(t.source);
-        if (this.deps.devices.anyWith(PLAN_INFO[t.source].capability)) deals.push({ id: t.source, goal: t.goal });
+        if (this.deps.devices.anyWith(PLAN_INFO[t.source].capability)) deals.push({ id: t.source, goal: t.goal, label: t.label });
         else dropped.push(`run ${t.source}`);
       } else if (t.tool === "web") {
         if (this.deps.devices.anyWith("web")) general.push(t);
@@ -377,6 +387,7 @@ export class RunManager {
       const g: GeneralTask = { tool: t.tool === "deals" ? "web" : t.tool, startUrl: validUrl(t.startUrl), setIds: [], findings: null, summary: null };
       this.subtasks.set(s.id, s);
       this.waves.set(s.id, this.agentRuns.get(run.id)?.wave ?? 1);
+      if (t.label) this.names.set(s.id, t.label);
       this.byRun.get(run.id)!.push(s.id);
       this.general.set(s.id, g);
       if (scheduled) this.queuedAt.set(s.id, now);
@@ -414,6 +425,8 @@ export class RunManager {
 
   /** Deal-only planner: picks from the fixed sources (the original path, also the agent's fallback). */
   private async planDeals(run: RunRecord) {
+    this.titles.set(run.id, "Deal search");
+    this.stages.set(run.id, ["Collect deals"]);
     const available = PLAN_IDS.filter((id) => this.deps.devices.anyWith(PLAN_INFO[id].capability));
     let chosen: { id: PlanId; goal: string }[];
     let planNote: string;
@@ -471,7 +484,7 @@ export class RunManager {
     return this.view(run.id);
   }
 
-  private startSubtasks(run: RunRecord, chosen: { id: PlanId; goal: string }[], planNote: string) {
+  private startSubtasks(run: RunRecord, chosen: { id: PlanId; goal: string; label?: string }[], planNote: string) {
     const now = Date.now();
     for (const c of chosen) {
       const info = PLAN_INFO[c.id];
@@ -493,6 +506,7 @@ export class RunManager {
       };
       this.subtasks.set(s.id, s);
       this.waves.set(s.id, this.agentRuns.get(run.id)?.wave ?? 1);
+      if (c.label) this.names.set(s.id, c.label);
       this.byRun.get(run.id)!.push(s.id);
       this.queuedAt.set(s.id, now);
       if (!this.deps.devices.anyWith(s.capability)) {
@@ -862,6 +876,7 @@ export class RunManager {
         if (deals.length || general.length) {
           log.info(`run ${run.id} follow-up: ${plan.reasoning.slice(0, 200)}`);
           this.plans.set(run.id, [this.plans.get(run.id), `Follow-up: ${plan.reasoning}`].filter(Boolean).join("\n\n"));
+          this.stages.set(run.id, [...(this.stages.get(run.id) ?? []), plan.stage]);
           this.saveStep({ time: Date.now(), runId: run.id, subtaskId: null, deviceId: null, kind: "plan", detail: { planner: "agent follow-up", reasoning: plan.reasoning, tasks: plan.tasks }, tokensIn: 0, tokensOut: 0, model: null });
           this.addGeneral(run, general);
           if (deals.length) this.startSubtasks(run, deals, "agent follow-up");

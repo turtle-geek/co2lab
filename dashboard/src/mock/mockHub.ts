@@ -371,12 +371,14 @@ export class MockHub {
     setTimeout(() => {
       addBurn(run.view.burn, 820, 140);
       run.subtasks = Object.entries(SCRIPTS).map(([cap, s]) => ({
-        view: { id: this.id("sub"), capability: cap, goal: `Collect current offers from ${s.label}`, status: "queued", deviceId: null, attempt: 1, error: null, dealCount: 0 },
+        view: { id: this.id("sub"), capability: cap, goal: `Collect current offers from ${s.label}`, name: `${s.label} offers`, tool: "deals", wave: 1, status: "queued", deviceId: null, attempt: 1, error: null, dealCount: 0 },
         stepIndex: 0,
         willFailAt: failPopeyes && cap === "app:popeyes" ? 2 : null,
       }));
       run.view.status = "running";
       // Mock planner reasoning, so the dashboard shows the plan summary like the real hub does.
+      run.view.title = "Lunch deal search";
+      run.view.stages = ["Read in-app offers"];
       run.view.plan =
         "The request is about lunch deals, so I will use every deal source with an online device. The Galaxy A54 has the Tim Hortons, McDonald's and Popeyes apps signed in, so it reads their in-app offers. The Dragonfly browses RedFlagDeals for local food deals at the same time.";
       this.schedule();

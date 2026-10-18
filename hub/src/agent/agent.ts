@@ -26,12 +26,15 @@ export interface PlannedTask {
   /** deals: which recipe source. */
   source: PlanId | null;
   goal: string;
+  label?: string;
   startUrl: string | null;
   steamAppIds: number[];
 }
 
 export interface Plan {
   reasoning: string;
+  title: string;
+  stage: string;
   tasks: PlannedTask[];
   cannotDo: string | null;
 }
@@ -42,11 +45,16 @@ const TaskSchema = z.object({
   package: z.string().nullable(),
   source: z.enum(PLAN_IDS).nullable(),
   goal: z.string().min(3).max(400),
+  /** Shown on the dashboard: 1-4 words, e.g. "Tim Hortons offers", "Steam co-op search". */
+  label: z.string().min(1).max(40),
   startUrl: z.string().nullable(),
   steamAppIds: z.array(z.number().int().positive()).max(6),
 });
 const PlanSchema = z.object({
   reasoning: z.string().max(800),
+  /** Dashboard labels (see LABEL_RULES): the whole request, and this round of tasks. */
+  title: z.string().min(2).max(48),
+  stage: z.string().min(2).max(36),
   tasks: z.array(TaskSchema).max(8),
   cannotDo: z.string().max(400).nullable(),
 });
@@ -69,6 +77,17 @@ function catalogText(devices: CatalogDevice[]): string {
     })
     .join("\n");
 }
+
+/**
+ * How the planner names things for the dashboard's task tree (a parent row, one group per round,
+ * one row per task). Short, plain, sentence case; never "Phase N", step numbers, or device names.
+ */
+const LABEL_RULES =
+  "Labels for the owner's dashboard: title = what this request is, 2-5 words, sentence case, no punctuation " +
+  "(e.g. 'Lunch deal search', 'Co-op game finder'). stage = what this round of tasks does, 2-4 words starting with a verb " +
+  "(e.g. 'Read in-app offers', 'Search the Steam store', 'Check player reviews'); never 'Phase', 'Step' or numbers. " +
+  "Each task label = 1-4 words naming the source or thing (e.g. 'Tim Hortons offers', 'Steam co-op search', 'Your Steam library'); " +
+  "no device names, no verbs like 'Collect'. ";
 
 const TOOLS_TEXT =
   "Tools (each task uses exactly one):\n" +
@@ -96,6 +115,7 @@ export async function planRequest(o: {
       "Decide what work answers the owner's request, using only the tools and devices listed. Prefer what the devices " +
       "uniquely have (signed-in apps, installed games) and say so in reasoning. Keep it small: 1-4 tasks usually. " +
       "Never plan payments, orders, sign-ins, messages or posts. Set fields a tool does not use to null / []. " +
+      LABEL_RULES +
       (followUp
         ? "This is a follow-up round: you see what the earlier tasks found. Decide what is still missing to fully answer the " +
           "request and add the tasks for it; return no tasks only when the findings already answer every part of the request. " +

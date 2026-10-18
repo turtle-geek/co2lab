@@ -1814,3 +1814,32 @@ code {
 .steps--sub .step__icon { width: 20px; height: 20px; }
 .steps--sub .step__icon svg { width: 13px; height: 13px; }
 .steps--sub .step__title { font-weight: 700; }
+
+/* ---------- Task tree (parent request, groups named by the planner, task rows) ---------- */
+.ttree { margin: 4px 0 12px; font-size: 0.92rem; }
+.ttree__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0 8px; }
+.ttree__title { font-weight: 800; font-size: 1rem; }
+.ttree__time { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.tchip { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border-radius: 6px; padding: 2px 7px; }
+.tchip--done { background: var(--green); color: #fff; }
+.tchip--todo { background: var(--gray-pill); color: var(--ink); }
+.tchip--failed { background: var(--red-soft); color: var(--red); }
+.ttree ul { list-style: none; margin: 0; padding: 0; }
+/* the trunk line from the parent icon down through the groups */
+.ttree__body { margin-left: 11px; border-left: 2px solid var(--line); padding-left: 0; }
+.tgroup { position: relative; padding: 6px 0 2px 18px; }
+.tgroup::before { content: ""; position: absolute; left: -2px; top: 15px; width: 14px; border-top: 2px solid var(--line); }
+.ttree__body > .tgroup:last-child { border-left: 2px solid var(--card); margin-left: -2px; }
+.ttree__body > .tgroup:last-child::before { left: 0; }
+.tgroup__name { display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 2px; }
+.trow { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; }
+.trow:hover { background: rgba(255, 255, 255, 0.55); }
+.trow .step__icon { width: 20px; height: 20px; }
+.trow .step__icon svg { width: 13px; height: 13px; }
+.trow__name { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow--waiting .trow__name { color: var(--muted); font-weight: 600; }
+.trow__device { color: var(--muted); font-size: 0.8rem; white-space: nowrap; background: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; }
+.trow__result { color: var(--muted); font-size: 0.85rem; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.trow--failed .trow__result { color: var(--red); }
+.trow--done .trow__result { color: var(--ink); }
+@media (max-width: 640px) { .trow { grid-template-columns: 20px minmax(0, 1fr) auto; } .trow__device { display: none; } }

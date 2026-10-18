@@ -191,6 +191,10 @@ export const SubtaskView = z.object({
   label: z.string().optional(),
   /** General agent: planning round that created this task (1 = first plan, 2+ = follow-ups). */
   wave: z.number().int().optional(),
+  /** Short display name from the planner (e.g. "Tim Hortons offers"); falls back to label. */
+  name: z.string().optional(),
+  /** Which planner tool made this task. */
+  tool: z.enum(["deals", "web", "app", "reviews"]).optional(),
   /** When a device started / finished this task (ms), for "time your devices worked". */
   startedAt: z.number().nullable().optional(),
   finishedAt: z.number().nullable().optional(),
@@ -209,6 +213,9 @@ export const RunView = z.object({
   answer: RunAnswer.nullable().optional(),
   /** General agent: the planner's reasoning for this run (first plan, then follow-ups). */
   plan: z.string().nullable().optional(),
+  /** Planner's short title for the request (e.g. "Lunch deal search") and a name per planning round. */
+  title: z.string().nullable().optional(),
+  stages: z.array(z.string()).optional(),
   burn: Burn,
   error: z.string().nullable(),
   createdAt: z.number(),

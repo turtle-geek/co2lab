@@ -108,143 +108,130 @@ function StepIcon({ state }: { state: StepState }) {
   );
 }
 
-function Step(props: { state: StepState; title: ReactNode; detail?: ReactNode; meta?: ReactNode; children?: ReactNode }) {
+const secs = (from: number | null | undefined, to: number) => (from ? `${Math.max(0, Math.round((to - from) / 1000))} s` : "");
+
+/** One row in the task tree: icon, name, then device and result on the right (one line, like a task list). */
+function Row(props: { state: StepState; name: ReactNode; device?: string | null; result?: ReactNode; bold?: boolean }) {
   return (
-    <li className={`step step--${props.state}`}>
+    <li className={`trow trow--${props.state}${props.bold ? " trow--group" : ""}`}>
       <StepIcon state={props.state} />
-      <div className="step__body">
-        <div className="step__head">
-          <span className="step__title">{props.title}</span>
-          {props.meta && <span className="step__meta">{props.meta}</span>}
-        </div>
-        {props.detail && <div className="step__detail">{props.detail}</div>}
-        {props.children}
-      </div>
+      <span className="trow__name">{props.name}</span>
+      {props.device && <span className="trow__device">{props.device}</span>}
+      {props.result !== undefined && <span className="trow__result">{props.result}</span>}
     </li>
   );
 }
 
-const secs = (from: number | null | undefined, to: number) => (from ? `${Math.max(0, Math.round((to - from) / 1000))} s` : "");
+/** What each device told the planner, in a few words ("88 apps", "Microsoft Edge"). */
+function shares(d: DeviceView): string {
+  const c = d.context ?? [];
+  const apps = c.filter((x) => x.kind === "installed_app").length;
+  const games = c.filter((x) => x.kind === "steam_game").length;
+  const browser = c.find((x) => x.kind === "browser")?.label;
+  return [apps ? `${apps} apps` : "", games ? `${games} games` : "", browser ?? ""].filter(Boolean).join(" · ") || d.kind;
+}
 
 /**
- * What the agents decided and what has run, in order (like CI checks): plan -> tasks per round -> answer.
- * Every row has one clear state, so waiting for Gemini never looks like nothing is happening.
+ * The request as a task tree: a parent row (title, done / to-do counts, time), then groups: the devices
+ * the planner looked at, one group per planning round (named by the planner), and the final step.
  */
-function Steps({ run, deviceName }: { run: RunView; deviceName: (id: string | null) => string | null }) {
+function Steps({ run, devices }: { run: RunView; devices: DeviceView[] }) {
   const now = useNow();
+  const deviceName = (id: string | null) => (id ? devices.find((d) => d.id === id)?.name ?? "removed device" : null);
   const planning = run.status === "planning";
-  const general = run.subtasks.some((s) => /^(Web: |App: |Review analysis)/.test(s.label ?? ""));
+  const general = run.subtasks.some((s) => s.tool && s.tool !== "deals");
   const rounds = new Map<number, SubtaskView[]>();
   for (const s of run.subtasks) rounds.set(s.wave ?? 1, [...(rounds.get(s.wave ?? 1) ?? []), s]);
-  const plans = (run.plan ?? "").split(/\n\n+/).filter(Boolean);
-  const thinkingAgain = run.status === "running" && general && run.subtasks.every((s) => s.status !== "queued" && s.status !== "running");
+  const done = run.subtasks.filter((s) => s.status === "done").length;
+  const todo = run.subtasks.filter((s) => s.status === "queued" || s.status === "running").length;
+  const failed = run.subtasks.filter((s) => s.status === "failed").length;
+  const finished = run.status === "done" || run.status === "failed";
+  const thinkingAgain = run.status === "running" && general && run.subtasks.length > 0 && run.subtasks.every((s) => s.status !== "queued" && s.status !== "running");
+  // Devices the planner could use: the ones it gave work to, plus any online one that shares something.
+  const used = new Set(run.subtasks.map((s) => s.deviceId).filter(Boolean));
+  const scoped = devices.filter((d) => d.state !== "revoked" && (used.has(d.id) || (d.state !== "offline" && (d.context?.length ?? 0) > 0)));
 
-  const taskRow = (s: SubtaskView) => {
-    const dev = deviceName(s.deviceId);
-    const state: StepState =
-      s.status === "done" ? "done" : s.status === "failed" ? "failed" : s.status === "running" ? "running" : s.status === "cancelled" ? "skipped" : "waiting";
-    let detail: string;
-    if (s.status === "failed") detail = s.error ?? "failed";
-    else if (s.status === "done") detail = s.findings ?? (s.dealCount === 0 ? "nothing found" : `${s.dealCount} ${general ? "item" : "deal"}${s.dealCount === 1 ? "" : "s"} found`);
-    else if (s.status === "running") detail = dev ? `working on ${dev}` : "working";
-    else if (s.status === "cancelled") detail = s.error ?? "cancelled";
-    else detail = s.attempt > 1 ? "waiting for another device" : "waiting for a free device";
-    return (
-      <Step
-        key={s.id}
-        state={state}
-        title={s.label ?? capabilityLabel(s.capability)}
-        meta={[dev && s.status !== "running" ? dev : null, s.attempt > 1 ? `attempt ${s.attempt}` : null].filter(Boolean).join(" · ") || undefined}
-        detail={detail}
-      />
-    );
+  const taskState = (s: SubtaskView): StepState =>
+    s.status === "done" ? "done" : s.status === "failed" ? "failed" : s.status === "running" ? "running" : s.status === "cancelled" ? "skipped" : "waiting";
+  const result = (s: SubtaskView): string => {
+    if (s.status === "failed") return s.error ?? "failed";
+    if (s.status === "cancelled") return "cancelled";
+    if (s.status === "running") return "running…";
+    if (s.status === "queued") return s.attempt > 1 ? "waiting for another device" : "waiting";
+    if (s.tool && s.tool !== "deals") return s.findings ?? `${s.dealCount} found`;
+    return `${s.dealCount} deal${s.dealCount === 1 ? "" : "s"}`;
   };
 
-  /** The planner's reasoning for a round, shortened to its first sentences, with the rest behind "more". */
-  const PlanText = ({ text, subs }: { text?: string; subs: SubtaskView[] }) => {
-    if (!text) {
-      // Deal-only planner (or an older hub): say what was chosen instead.
-      const byDevice = new Map<string, string[]>();
-      for (const s of subs) {
-        const where = deviceName(s.deviceId) ?? "a free device";
-        byDevice.set(where, [...(byDevice.get(where) ?? []), s.label ?? capabilityLabel(s.capability)]);
-      }
-      if (!byDevice.size) return null;
-      return <p className="step__summary">Check {[...byDevice.entries()].map(([d, l]) => `${l.join(", ")} on ${d}`).join("; ")}.</p>;
-    }
-    const clean = text.replace(/^Follow-up:s*/, "");
-    const short = clean.split(/(?<=[.!?])s+/).slice(0, 2).join(" ");
-    return (
-      <div className="step__summary">
-        <p>{short}</p>
-        {short.length < clean.length && (
-          <details className="step__why">
-            <summary>more</summary>
-            <p>{clean}</p>
-          </details>
-        )}
-      </div>
-    );
-  };
-
-  const roundEntries = [...rounds.entries()];
   return (
-    <ol className="steps" aria-label="What the agents are doing">
-      {roundEntries.length === 0 || planning ? (
-        <Step
-          state={planning ? "running" : run.status === "failed" ? "failed" : "done"}
-          title={planning ? "Planning with Gemini" : "Gemini made a plan"}
-          meta={planning ? secs(run.createdAt, now) : undefined}
-          detail={
-            planning ? (
-              <span className="thinking">
-                Reading your request and what each device has (apps, games, browser)<span className="thinking__dots" aria-hidden />
-              </span>
-            ) : undefined
-          }
-        />
-      ) : (
-        roundEntries.map(([wave, subs]) => (
-          // Each planning round is a step; the tasks it created are its sub-steps.
-          <Step
-            key={`w${wave}`}
-            state="done"
-            title={wave === 1 ? "Gemini made a plan" : `Gemini added follow-up ${wave - 1}`}
-            meta={`${subs.length} task${subs.length === 1 ? "" : "s"}`}
-            detail={<PlanText text={plans[wave - 1]} subs={subs} />}
-          >
-            <ol className="steps steps--sub">{subs.map(taskRow)}</ol>
-          </Step>
-        ))
-      )}
-      {thinkingAgain && (
-        <Step
-          state="running"
-          title="Checking what is still missing"
-          detail={
-            <span className="thinking">
-              Gemini is reading the findings and deciding the next step<span className="thinking__dots" aria-hidden />
-            </span>
-          }
-        />
-      )}
-      {(run.subtasks.length > 0 || run.status === "done" || run.status === "merging") && (
-        <Step
-          state={run.status === "merging" ? "running" : run.status === "done" ? "done" : run.status === "failed" ? "failed" : "waiting"}
-          title={general ? "Write the answer" : "Rank the deals"}
-          meta={run.status === "done" && run.finishedAt ? `total ${secs(run.createdAt, run.finishedAt)}` : undefined}
-          detail={
-            run.status === "failed" ? (
-              run.error ?? "no task finished"
-            ) : run.status === "merging" ? (
-              <span className="thinking">
-                Combining what the devices found<span className="thinking__dots" aria-hidden />
-              </span>
-            ) : undefined
-          }
-        />
-      )}
-    </ol>
+    <div className="ttree" aria-label="What the agents are doing">
+      <div className="ttree__head">
+        <StepIcon state={planning || !finished ? "running" : run.status === "failed" ? "failed" : "done"} />
+        <span className="ttree__title">{run.title || (planning ? "Planning" : run.prompt)}</span>
+        {done > 0 && <span className="tchip tchip--done">{done} done</span>}
+        {todo > 0 && <span className="tchip tchip--todo">{todo} to do</span>}
+        {failed > 0 && <span className="tchip tchip--failed">{failed} failed</span>}
+        <span className="ttree__time">{secs(run.createdAt, run.finishedAt ?? now)}</span>
+      </div>
+      <ul className="ttree__body">
+        <li className="tgroup">
+          <span className="tgroup__name">Check your devices</span>
+          <ul>
+            {planning && !scoped.length && <Row state="running" name="Reading what each device has" />}
+            {scoped.map((d) => (
+              <Row key={d.id} state={planning ? "running" : "done"} name={d.name} result={shares(d)} />
+            ))}
+          </ul>
+        </li>
+        {planning && (
+          <li className="tgroup">
+            <span className="tgroup__name">Plan the work</span>
+            <ul>
+              <Row state="running" name={<span className="thinking">Gemini is choosing the tasks<span className="thinking__dots" aria-hidden /></span>} />
+            </ul>
+          </li>
+        )}
+        {[...rounds.entries()].map(([wave, subs]) => (
+          <li key={wave} className="tgroup">
+            <span className="tgroup__name">{run.stages?.[wave - 1] || (wave === 1 ? (general ? "Do the tasks" : "Collect deals") : "Next step")}</span>
+            <ul>
+              {subs.map((s) => (
+                <Row key={s.id} state={taskState(s)} name={s.name ?? s.label ?? capabilityLabel(s.capability)} device={deviceName(s.deviceId)} result={result(s)} />
+              ))}
+            </ul>
+          </li>
+        ))}
+        {thinkingAgain && (
+          <li className="tgroup">
+            <span className="tgroup__name">Plan the next step</span>
+            <ul>
+              <Row state="running" name={<span className="thinking">Gemini is reading the findings<span className="thinking__dots" aria-hidden /></span>} />
+            </ul>
+          </li>
+        )}
+        {run.subtasks.length > 0 && (
+          <li className="tgroup">
+            <span className="tgroup__name">Finish</span>
+            <ul>
+              <Row
+                state={run.status === "merging" ? "running" : run.status === "done" ? "done" : run.status === "failed" ? "failed" : "waiting"}
+                name={general ? "Write the answer" : "Rank the deals"}
+                result={
+                  run.status === "failed"
+                    ? run.error ?? "no task finished"
+                    : run.status === "done"
+                      ? general
+                        ? "answer ready"
+                        : `${run.ranked?.length ?? 0} deals ranked`
+                      : run.status === "merging"
+                        ? "working…"
+                        : undefined
+                }
+              />
+            </ul>
+          </li>
+        )}
+      </ul>
+    </div>
   );
 }
 
@@ -428,11 +415,11 @@ export function Results({
               </span>
               <span className="steps-fold__open">Show steps</span>
             </summary>
-            <Steps run={run} deviceName={deviceName} />
+            <Steps run={run} devices={devices} />
           </details>
         </>
       ) : (
-        <Steps run={run} deviceName={deviceName} />
+        <Steps run={run} devices={devices} />
       )}
       {children}
     </section>
