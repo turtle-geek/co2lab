@@ -36,7 +36,7 @@ export function AskBar({
         value={text}
         maxLength={500}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Ask your devices, e.g. lunch deals near UTSC"
+        placeholder="Ask your devices to do anything"
         aria-label="Ask your devices"
         enterKeyHint="go"
       />
