@@ -1825,12 +1825,13 @@ code {
 .tchip--todo { background: var(--gray-pill); color: var(--ink); }
 .tchip--failed { background: var(--red-soft); color: var(--red); }
 .ttree ul { list-style: none; margin: 0; padding: 0; }
-/* the trunk line from the parent icon down through the groups */
-.ttree__body { margin-left: 11px; border-left: 2px solid var(--line); padding-left: 0; }
-.tgroup { position: relative; padding: 6px 0 2px 18px; }
-.tgroup::before { content: ""; position: absolute; left: -2px; top: 15px; width: 14px; border-top: 2px solid var(--line); }
-.ttree__body > .tgroup:last-child { border-left: 2px solid var(--card); margin-left: -2px; }
-.ttree__body > .tgroup:last-child::before { left: 0; }
+/* Tree lines: a trunk from the centre of the parent icon (24 px wide -> 11 px + 2 px line), drawn per group:
+   full height through each group, and on the last group only down to its elbow (└). */
+.ttree .ttree__body { margin: 0 0 0 11px; padding: 0; border: 0; }
+.ttree .tgroup { position: relative; padding: 6px 0 2px 20px; }
+.ttree .tgroup::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--line); }
+.ttree .tgroup:last-child::after { bottom: auto; height: 16px; }
+.ttree .tgroup::before { content: ""; position: absolute; left: 0; top: 14px; width: 14px; height: 2px; background: var(--line); }
 .tgroup__name { display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 2px; }
 .trow { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 8px; }
 .trow:hover { background: rgba(255, 255, 255, 0.55); }
