@@ -1946,3 +1946,5 @@ code {
 .impact__name small { white-space: normal; }
 .exp-drafts { margin-top: 12px; }
 .exp-drafts > summary { cursor: pointer; color: var(--muted); font-weight: 700; font-size: 0.88rem; padding: 6px 0; }
+.results__title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.results__clear { font-size: 0.85rem; font-weight: 700; flex: 0 0 auto; }

@@ -27,7 +27,24 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
 
   const readOnly = role === "viewer" || state.role === "viewer";
   const connected = status === "open";
-  const run = currentRun(state.runs);
+  // "Clear" hides a finished run in this browser only (nothing is deleted); a new request shows as usual.
+  const [clearedRunId, setClearedRunId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("co2lab.clearedRun");
+    } catch {
+      return null;
+    }
+  });
+  const latest = currentRun(state.runs);
+  const run = latest && latest.id === clearedRunId ? null : latest;
+  const clearRun = (id: string) => {
+    setClearedRunId(id);
+    try {
+      localStorage.setItem("co2lab.clearedRun", id);
+    } catch {
+      /* private mode: cleared until reload */
+    }
+  };
   const busy = !!hub.pendingRunId && !state.runs.some((r) => r.clientRunId === hub.pendingRunId);
 
   // Auto-hide hub errors after a few seconds.
@@ -189,6 +206,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
                 connected={connected}
                 onShare={(runId, target) => hub.send({ type: "share.request", runId, target })}
                 onAsk={hub.createRun}
+                onClear={readOnly ? undefined : clearRun}
               >
                 <Approvals
                   approvals={state.approvals}

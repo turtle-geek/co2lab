@@ -324,8 +324,11 @@ export function Results({
   onShare,
   children,
   onAsk,
+  onClear,
 }: {
   children?: ReactNode;
+  /** Hide this finished run from the Agent tab (this browser only). */
+  onClear?(runId: string): void;
   run: RunView | null;
   devices: DeviceView[];
   readOnly: boolean;
@@ -414,8 +417,15 @@ export function Results({
   );
   return (
     <section className="panel results" aria-label="Results">
-      <h2 className="panel__title">
-        Agent run <span className="results__prompt">“{run.prompt}”</span>
+      <h2 className="panel__title results__title">
+        <span>
+          Agent run <span className="results__prompt">“{run.prompt}”</span>
+        </span>
+        {finished && onClear && (
+          <button className="link-btn results__clear" onClick={() => onClear(run.id)} title="Hide this run here. It stays in Lab → Impact.">
+            Clear
+          </button>
+        )}
       </h2>
 
       {finished ? (
