@@ -153,7 +153,7 @@ function Steps({ run, deviceName }: { run: RunView; deviceName: (id: string | nu
     <ol className="steps" aria-label="What the agents are doing">
       <Step
         state={planning ? "running" : run.subtasks.length || run.plan ? "done" : run.status === "failed" ? "failed" : "done"}
-        title={planning ? "Planning with Gemini" : "Plan"}
+        title={planning ? "Planning with Gemini" : "Gemini made a plan"}
         meta={planning ? secs(run.createdAt, now) : `${run.subtasks.filter((s) => (s.wave ?? 1) === 1).length} task(s)`}
         detail={
           planning ? (
@@ -162,7 +162,7 @@ function Steps({ run, deviceName }: { run: RunView; deviceName: (id: string | nu
             </span>
           ) : plans[0] ? (
             <details className="step__why">
-              <summary>Why</summary>
+              <summary>Show the plan</summary>
               {plans[0]}
             </details>
           ) : null
@@ -178,7 +178,7 @@ function Steps({ run, deviceName }: { run: RunView; deviceName: (id: string | nu
                 detail={
                   plans[wave - 1] ? (
                     <details className="step__why">
-                      <summary>Why</summary>
+                      <summary>Show why</summary>
                       {plans[wave - 1]!.replace(/^Follow-up:\s*/, "")}
                     </details>
                   ) : null
@@ -305,7 +305,7 @@ export function Results({
   if (!run) {
     return (
       <section className="panel results" aria-label="Results">
-        <h2 className="panel__title">Results</h2>
+        <h2 className="panel__title">Agent run</h2>
         {readOnly ? (
           <p className="empty">No run yet. Results show up here live.</p>
         ) : (
@@ -328,7 +328,7 @@ export function Results({
   return (
     <section className="panel results" aria-label="Results">
       <h2 className="panel__title">
-        Results <span className="results__prompt">“{run.prompt}”</span>
+        Agent run <span className="results__prompt">“{run.prompt}”</span>
       </h2>
 
       <Steps run={run} deviceName={deviceName} />

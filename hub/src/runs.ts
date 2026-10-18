@@ -165,6 +165,8 @@ export class RunManager {
         findings: this.general.get(s.id)?.summary ?? null,
         label: s.label,
         wave: this.waves.get(s.id) ?? 1,
+        startedAt: s.startedAt,
+        finishedAt: s.finishedAt,
       })),
       ranked: r.ranked,
       answer: r.answer ?? null,

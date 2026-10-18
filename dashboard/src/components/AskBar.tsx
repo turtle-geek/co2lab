@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import type { Burn, RunView } from "@co2lab/shared";
-import { EXAMPLE_PROMPTS, fmtInt, fmtUsd } from "../format";
+import { fmtInt, fmtUsd } from "../format";
 
 const EXAMPLE = "Best lunch deals near UTSC today";
 
@@ -16,16 +16,8 @@ export function AskBar({
   onAsk(prompt: string): boolean;
 }) {
   const [text, setText] = useState("");
-  const [focused, setFocused] = useState(false);
-  const [i, setI] = useState(0);
-  // Rotate through real examples while the box is empty and idle; Enter on an empty box runs the one shown.
-  useEffect(() => {
-    if (focused || text) return;
-    const t = setInterval(() => setI((n) => (n + 1) % EXAMPLE_PROMPTS.length), 4_000);
-    return () => clearInterval(t);
-  }, [focused, text]);
   if (readOnly) return null;
-  const example = EXAMPLE_PROMPTS[i] ?? EXAMPLE;
+  const example = EXAMPLE;
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -40,9 +32,7 @@ export function AskBar({
         value={text}
         maxLength={500}
         onChange={(e) => setText(e.target.value)}
-        placeholder={example}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        placeholder={`Ask your devices, e.g. ${EXAMPLE}`}
         aria-label="Ask your devices"
         enterKeyHint="go"
       />
@@ -61,46 +51,62 @@ const STATUS_TEXT: Record<RunView["status"], string> = {
   failed: "Failed",
 };
 
+/** Time each device spent on this request's tasks: work done on reused hardware instead of new machines. */
+function deviceWork(run: RunView | null): { ms: number; devices: number } {
+  const per = new Map<string, number>();
+  for (const st of run?.subtasks ?? []) {
+    if (!st.deviceId || !st.startedAt) continue;
+    const end = st.finishedAt ?? Date.now();
+    per.set(st.deviceId, (per.get(st.deviceId) ?? 0) + Math.max(0, end - st.startedAt));
+  }
+  return { ms: [...per.values()].reduce((a, b) => a + b, 0), devices: per.size };
+}
+
+function fmtDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
+}
+
+/** A 10 W LED bulb: an easy picture for small amounts of energy. */
+const LED_W = 10;
+function ledTime(wh: number): string {
+  const min = (wh / LED_W) * 60;
+  return min < 1 ? `${Math.max(1, Math.round(min * 60))} s` : min < 90 ? `${Math.round(min)} min` : `${(min / 60).toFixed(1)} h`;
+}
+
 export function BurnMeter({ run }: { run: RunView | null }) {
   const b: Burn = run?.burn ?? { tokensIn: 0, tokensOut: 0, costUsd: 0, energyWh: 0, gCo2: 0 };
   const active = run && (run.status === "planning" || run.status === "running" || run.status === "merging");
+  const work = deviceWork(run);
   return (
-    <div className={active ? "burn burn--active" : "burn"} aria-label="Burn-o-meter for the current run">
+    <div className={active ? "burn burn--active" : "burn"} aria-label="Burn-o-meter for the current request">
       <span className="burn__title">
-        <span className="burn__flame" aria-hidden>🔥</span> Burn
+        <span className="burn__flame" aria-hidden>🔥</span> Burn-o-meter
         {run && <span className={`burn__status burn__status--${run.status}`}>{STATUS_TEXT[run.status]}</span>}
       </span>
-      <span className="burn__stat" title="What the Gemini calls for this request cost, at list prices (estimate)">
+      <span
+        className="burn__stat burn__stat--green"
+        title="Time your old devices spent working on this request: work done on hardware you already own instead of new machines or extra cloud servers."
+      >
+        <span className="burn__label">Old devices at work</span>
+        <b>{fmtDuration(work.ms)}</b>
+        <span className="burn__sub">{work.devices ? `on ${work.devices} reused device${work.devices === 1 ? "" : "s"}` : "none yet"}</span>
+      </span>
+      <span
+        className="burn__stat"
+        title={`Data-centre energy for the AI calls: ${b.energyWh.toFixed(2)} Wh (estimate from Google's published per-prompt figures).`}
+      >
+        <span className="burn__label">AI energy</span>
+        <b>{b.energyWh > 0 ? `LED bulb for ${ledTime(b.energyWh)}` : "0"}</b>
+        <span className="burn__sub">
+          {b.energyWh.toFixed(1)} Wh · {b.gCo2.toFixed(1)} g CO₂ (est.)
+        </span>
+      </span>
+      <span className="burn__stat" title="What the Gemini calls cost at list prices (estimate). Tokens are the text and images the AI read and wrote.">
         <span className="burn__label">AI cost</span>
         <b>{fmtUsd(b.costUsd)}</b>
-      </span>
-      <span className="burn__stat" title={`${b.energyWh.toFixed(2)} Wh of data-centre energy (estimate from Google's published per-prompt figures). A phone charge is about ${PHONE_CHARGE_WH} Wh.`}>
-        <span className="burn__label">Energy</span>
-        <b>{phoneCharges(b.energyWh)}</b>
-      </span>
-      <span className="burn__stat" title={`${b.gCo2.toFixed(2)} g CO₂ (estimate). A petrol car emits about ${CAR_G_PER_KM} g per km.`}>
-        <span className="burn__label">CO₂</span>
-        <b>{carDistance(b.gCo2)}</b>
-      </span>
-      <span className="burn__stat burn__stat--minor" title="Tokens: the amount of text and images the AI read and wrote">
-        {fmtInt(b.tokensIn + b.tokensOut)} tokens
+        <span className="burn__sub">{fmtInt(b.tokensIn + b.tokensOut)} tokens</span>
       </span>
     </div>
   );
-}
-
-/** Everyday comparisons for the burn-o-meter (rough, labeled as estimates in the tooltips). */
-const PHONE_CHARGE_WH = 12;
-const CAR_G_PER_KM = 150;
-
-function phoneCharges(wh: number): string {
-  if (wh <= 0) return "0";
-  const n = wh / PHONE_CHARGE_WH;
-  return n < 0.1 ? `${Math.max(1, Math.round(n * 100))}% of a phone charge` : `${n.toFixed(1)} phone charges`;
-}
-
-function carDistance(g: number): string {
-  if (g <= 0) return "0";
-  const m = (g / CAR_G_PER_KM) * 1000;
-  return m < 1000 ? `≈ ${Math.max(1, Math.round(m))} m of driving` : `≈ ${(m / 1000).toFixed(1)} km of driving`;
 }

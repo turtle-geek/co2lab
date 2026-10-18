@@ -155,7 +155,8 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             <BurnMeter run={run} />
           </div>
 
-          {/* The run comes first: what the agents decided, what has run, and the answer, without scrolling. */}
+          {/* Run on the left (what the agents decided, what ran, the answer), devices on the right: both visible at once. */}
+          <div className="home">
           <Results
             run={run}
             devices={state.devices}
@@ -180,6 +181,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             onRevoke={(id) => hub.send({ type: "device.revoke", deviceId: id })}
             frames={state.frames}
           />
+          </div>
 
           <LiveScreens devices={state.devices} frames={state.frames} steps={state.steps} run={run} />
         </main>

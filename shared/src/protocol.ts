@@ -191,6 +191,9 @@ export const SubtaskView = z.object({
   label: z.string().optional(),
   /** General agent: planning round that created this task (1 = first plan, 2+ = follow-ups). */
   wave: z.number().int().optional(),
+  /** When a device started / finished this task (ms), for "time your devices worked". */
+  startedAt: z.number().nullable().optional(),
+  finishedAt: z.number().nullable().optional(),
 });
 export type SubtaskView = z.infer<typeof SubtaskView>;
 

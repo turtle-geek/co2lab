@@ -1749,3 +1749,13 @@ code {
 .lab-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--card); margin-bottom: 12px; align-self: flex-start; }
 .lab-switch button { border: 0; background: transparent; padding: 8px 16px; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; }
 .lab-switch button.seg__on { background: var(--green-pill); color: var(--green-deep); }
+.burn__sub { font-size: 0.72rem; color: var(--muted); }
+.burn__stat--green b { color: var(--green-deep); }
+
+/* Home: run on the left, devices on the right (stacks on narrow screens). */
+.home { display: grid; gap: 16px; align-items: start; }
+@media (min-width: 1100px) {
+  .home { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  .home > .results { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+  .home .device-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+}
