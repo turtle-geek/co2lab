@@ -1,14 +1,31 @@
 # CO₂LAB
 
-Your old Android phone and laptop, working as an AI agent team that reads what is locked inside your apps.
+Run your personal AI agents on the old phone and laptop in your drawer, not on new hardware.
 
-Built at {TODO: hackathon name and year}. [Demo video]({TODO: link}) · [Devpost]({TODO: link})
+A solo project built at Hack the Valley 2026. [Live site](https://co2lab.work) · [Demo video]({TODO: link}) · [Devpost]({TODO: link})
 
 {TODO: add a screenshot, for example ![CO₂LAB dashboard](docs/screenshot.png)}
 
 ## Overview
 
-CO₂LAB turns devices you already own into a private agent fleet. Gemini plans each request, and a hub hands each task to the phone, laptop or cloud worker that can do it. Every request shows its CO₂e, and a research loop tests how to run the agents with less compute.
+An always-on agent needs a machine that stays on. Buying one costs money and adds manufacturing emissions. Running it on your daily phone wears out its battery.
+
+CO₂LAB uses the devices you already retired instead. A hub plans each request with Gemini and sends the work to an old Android phone, an old laptop, or a cloud worker. The dashboard shows each request's CO₂e, and the Lab tests cheaper ways to run the agents.
+
+## How a request runs
+
+1. Each device connects to the hub and reports its skills (apps, browser, Steam games), battery and temperature.
+2. Gemini reads those reports and splits the request into tasks.
+3. The scheduler gives each task to a device that can do it. Hot or offline devices are skipped.
+4. The phone works inside apps through the Accessibility Service. The laptop and cloud worker drive a browser with Playwright.
+5. When a step needs judgement, the device sends its screen to the hub and Gemini picks the next action.
+6. Gemini combines what the devices found into one answer. Every call is logged in Tiger Data.
+
+## Models
+
+- **Flash** plans requests and writes answers. If it is out of quota, the hub tries the older Flash models in `GEMINI_MODEL_FLASH_BACKUPS`, then Flash-Lite.
+- **Flash-Lite** steers the devices and reads screens. The Lab found it as accurate as Flash on the deal screens at a quarter of the cost.
+- All calls use one API key and go through the hub. Devices never hold a key.
 
 ## Features
 
@@ -17,8 +34,8 @@ CO₂LAB turns devices you already own into a private agent fleet. Gemini plans 
 - **General requests:** the planner reads what each device has (installed apps, Steam games, browser) and picks tasks to match.
 - **Health-aware scheduling:** work moves off a device that goes offline. Devices pause at 90 °C (laptop CPU) or 42 °C (phone battery).
 - **Burn meter:** each request shows its CO₂e, the old devices that worked on it, and the AI cost.
-- **Lab, Impact:** every Gemini call from Tiger Data, broken down by step, device and request.
-- **Lab, Research:** cites papers from Papiers, runs trials on labelled screenshots and saves findings.
+- **Lab, Impact:** every Gemini call from Tiger Data, broken down by step and device. Click a request to see only its calls.
+- **Lab, Research:** cites papers from Papiers, runs trials on labelled screenshots and saves findings. You can type your own idea to test.
 - **Compute jobs:** Steam review analysis split into batches across devices.
 
 ## Architecture
@@ -82,13 +99,14 @@ Build the Android app with Android Studio, or from `android/` with `./gradlew as
 | --- | --- |
 | `GEMINI_API_KEY` | The one Gemini key the hub uses |
 | `GEMINI_MODEL_LITE`, `GEMINI_MODEL_FLASH`, `GEMINI_MODEL_PRO` | Model IDs for each tier |
+| `GEMINI_MODEL_FLASH_BACKUPS` | Older Flash models to try, in order, when Flash is out of quota |
 | `OWNER_PASSPHRASE` | Dashboard login |
 | `SESSION_SECRET` | Signs the login cookie (32+ characters) |
 | `DATABASE_URL`, `DATABASE_PASSWORD` | Tiger Data connection. Leave empty to run in memory |
 | `PAPIERS_TOKEN` | Read access to your Papiers library for Lab research |
 | `HUB_PUBLIC_URL`, `HUB_PORT` | Public address and port of the hub |
 | `WORKER_HUB_URL` | Hub address for a worker run from the repo |
-| `VULTR_SERVER_IP`, `HUB_DOMAIN` | Used by `deploy/` scripts |
+| `VULTR_SERVER_IP`, `HUB_DOMAIN` | Used by `deploy/` scripts. `HUB_DOMAIN` is the public name, for example `co2lab.work` |
 
 ### Deploy
 
@@ -121,6 +139,6 @@ db/          Tiger Data schema
 deploy/      Vultr setup, Caddy and systemd files
 ```
 
-## Team
+## Author
 
-- {TODO: name}: {TODO: what they built} ({TODO: GitHub link})
+Built solo by [turtle-geek](https://github.com/turtle-geek): the hub, the dashboard, the Android app, the web worker and the Lab.
