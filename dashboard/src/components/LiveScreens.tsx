@@ -1,7 +1,6 @@
 import type { DeviceView, RunView, SubtaskView } from "@co2lab/shared";
 import type { LiveFrame, LiveStep } from "../state/hubState";
-import { STATE_LABEL, ago, capabilityLabel, useNow } from "../format";
-import { TelemetryLine } from "./DeviceGrid";
+import { ago, capabilityLabel, useNow } from "../format";
 
 /** What this device last finished in the run, for its "done" card. */
 function lastFinished(run: RunView | null | undefined, deviceId: string): SubtaskView | undefined {
@@ -43,17 +42,13 @@ function Screen({ device, frame, step, now, done, run }: { device: DeviceView; f
   return (
     <figure className={`screen ${phone ? "screen--phone" : "screen--browser"}${done ? " screen--done" : ""}`}>
       <figcaption className="screen__head">
-        <span className="screen__name">
-          <b>{device.name}</b>
-          <span className={`pill pill--${device.state}`}>{STATE_LABEL[device.state]}</span>
-          {!done && (
-            <span className="screen__live" aria-label="live">
-              ● {frame ? ago(frame.at, now) : "live"}
-            </span>
-          )}
-        </span>
-        <TelemetryLine device={device} now={now} />
+        <b>{device.name}</b>
         {task && <span className="screen__task">{task.label || capabilityLabel(task.capability)}</span>}
+        {!done && (
+          <span className="screen__live" aria-label="live">
+            ● {frame ? ago(frame.at, now) : "live"}
+          </span>
+        )}
       </figcaption>
       {phone ? (
         <div className="phone">
