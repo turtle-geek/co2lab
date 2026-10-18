@@ -38,7 +38,7 @@ function BatteryIcon({ pct, charging }: { pct: number; charging: boolean }) {
       <rect className="battery__cap" x="4.5" y="0.8" width="5" height="2.2" rx="1" />
       <rect className="battery__case" x="1.5" y="2.8" width="11" height="16.4" rx="2.5" />
       <rect className="battery__fill" x="3.5" y={4.8 + inner - h} width="7" height={h} rx="1" />
-      {charging && <path className="battery__bolt" d="M8.6 3.6 L3.4 11.4 H6.6 L5.4 17.8 L10.6 9.6 H7.4 Z" />}
+      {charging && <path className="battery__bolt" d="M8.9 4.2 L3.6 11.6 H6.6 L5.3 17.6 L10.6 9.9 H7.5 Z" />}
     </svg>
   );
 }
