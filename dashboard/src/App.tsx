@@ -114,7 +114,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             Agent
           </button>
           <button className={tab === "lab" || tab === "impact" ? "tab tab--on" : "tab"} onClick={() => setTab("impact")}>
-            Impact
+            Lab
           </button>
         </nav>
         {!readOnly && (
@@ -137,8 +137,8 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
 
       {tab === "lab" || tab === "impact" ? (
         <main className="main">
-          {/* Impact = what the requests cost (by step, device, request) and the Papiers research loop that cuts it. */}
-          <div className="seg lab-switch" role="tablist" aria-label="Impact sections">
+          {/* Lab: Impact = what the requests cost (by step, device, request) and the Papiers research loop that cuts it. */}
+          <div className="seg lab-switch" role="tablist" aria-label="Lab sections">
             <button role="tab" aria-selected={tab === "impact"} className={tab === "impact" ? "seg__on" : ""} onClick={() => setTab("impact")}>
               Impact
             </button>
@@ -147,7 +147,13 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
             </button>
           </div>
           {tab === "impact" ? (
-            <ImpactTab load={backend.aiUsage} runs={state.runs} devices={state.devices} />
+            <ImpactTab
+              load={backend.aiUsage}
+              runs={state.runs}
+              devices={state.devices}
+              screenshotScale={state.defaultConfig?.screenshotScale ?? 0.5}
+              onOpenResearch={() => setTab("lab")}
+            />
           ) : (
             <Lab experiments={state.experiments} defaultConfig={state.defaultConfig} devices={state.devices} readOnly={readOnly} connected={connected} send={hub.send} />
           )}

@@ -185,6 +185,8 @@ export interface AiUsageGroup {
   calls: number;
   tokensIn: number;
   tokensOut: number;
+  /** Part of tokensIn from screenshots (0 for calls recorded before this was tracked). */
+  imageTokens: number;
   gCo2: number;
   energyWh: number;
   costUsd: number;

@@ -159,14 +159,15 @@ export class MockHub {
     let runAt = 0;
     const wh = { lite: 0.096, flash: 0.24, pro: 0.96 } as const;
     const price = { lite: [0.1, 0.4], flash: [0.3, 2.5], pro: [1.25, 10] } as const;
-    const add = (deviceId: string | null, kind: string, tier: "lite" | "flash", calls: number, tin: number, tout: number) => {
+    const add = (deviceId: string | null, kind: string, tier: "lite" | "flash", calls: number, tin: number, tout: number, img = 0) => {
       const key = `${deviceId}|${kind}|${tier}`;
-      const g = groups.get(key) ?? { deviceId, kind, tier, calls: 0, tokensIn: 0, tokensOut: 0, gCo2: 0, energyWh: 0, costUsd: 0 };
+      const g = groups.get(key) ?? { deviceId, kind, tier, calls: 0, tokensIn: 0, tokensOut: 0, imageTokens: 0, gCo2: 0, energyWh: 0, costUsd: 0 };
       const e = ((tin + tout) / 1000) * wh[tier];
       Object.assign(g, {
         calls: g.calls + calls,
         tokensIn: g.tokensIn + tin,
         tokensOut: g.tokensOut + tout,
+        imageTokens: g.imageTokens + img,
         energyWh: g.energyWh + e,
         gCo2: g.gCo2 + e * 0.125,
         costUsd: g.costUsd + (tin * price[tier][0] + tout * price[tier][1]) / 1e6,
@@ -192,8 +193,8 @@ export class MockHub {
       for (const s of r.subtasks) {
         if (!s.view.deviceId || s.view.status === "queued") continue;
         const phone = s.view.deviceId === "dev-a54";
-        add(s.view.deviceId, "proxy", "lite", phone ? 4 : 2, phone ? 7200 : 3100, phone ? 260 : 140);
-        add(s.view.deviceId, "extract", "flash", 1, phone ? 3400 : 2100, 380);
+        add(s.view.deviceId, "proxy", "lite", phone ? 4 : 2, phone ? 7200 : 3100, phone ? 260 : 140, phone ? 4 * 1100 : 2 * 1100);
+        add(s.view.deviceId, "extract", "flash", 1, phone ? 3400 : 2100, 380, 1100);
       }
       if (r.view.status === "done") add(null, "merge", "flash", 1, 2300, 520);
     }

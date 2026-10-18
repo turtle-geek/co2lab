@@ -140,7 +140,8 @@ export class PgRepository implements Repository {
     const where = `time >= $1 and tokens_in + tokens_out > 0`;
     const { rows } = await this.q(
       `select device_id, kind, coalesce(detail->>'tier', 'flash') as tier, count(*)::int as calls,
-              sum(tokens_in)::float8 as tin, sum(tokens_out)::float8 as tout
+              sum(tokens_in)::float8 as tin, sum(tokens_out)::float8 as tout,
+              sum(coalesce((detail->>'imageTokens')::int, 0))::float8 as timg
          from agent_step where ${where} group by 1, 2, 3`,
       [ts(sinceMs)],
     );
@@ -152,7 +153,7 @@ export class PgRepository implements Repository {
     );
     return {
       requests: new Set(perRun.map((r) => r.run_id)).size,
-      groups: rows.map((r) => ({ deviceId: r.device_id, kind: r.kind, tier: r.tier, calls: r.calls, tokensIn: r.tin, tokensOut: r.tout })),
+      groups: rows.map((r) => ({ deviceId: r.device_id, kind: r.kind, tier: r.tier, calls: r.calls, tokensIn: r.tin, tokensOut: r.tout, imageTokens: r.timg })),
       runs: perRun.map((r) => ({ runId: r.run_id, tier: r.tier, firstAt: new Date(r.first_at).getTime(), calls: r.calls, tokensIn: r.tin, tokensOut: r.tout })),
     };
   }

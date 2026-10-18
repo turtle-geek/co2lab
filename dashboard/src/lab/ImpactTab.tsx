@@ -21,13 +21,14 @@ const KIND: Record<string, { label: string; lever: string }> = {
   merge: { label: "Writing the answer", lever: "Shorter answers would cut it most." },
 };
 
-type Part = { key: string; label: string; g: number; tokens: number; calls: number };
+type Part = { key: string; label: string; g: number; tokens: number; calls: number; img: number };
 
 function sum(groups: AiUsageGroup[], keyOf: (g: AiUsageGroup) => string, labelOf: (key: string) => string): Part[] {
   const m = new Map<string, Part>();
   for (const g of groups) {
     const key = keyOf(g);
-    const p = m.get(key) ?? { key, label: labelOf(key), g: 0, tokens: 0, calls: 0 };
+    const p = m.get(key) ?? { key, label: labelOf(key), g: 0, tokens: 0, calls: 0, img: 0 };
+    p.img += g.imageTokens ?? 0;
     p.g += g.gCo2;
     p.tokens += g.tokensIn + g.tokensOut;
     p.calls += g.calls;
@@ -36,7 +37,20 @@ function sum(groups: AiUsageGroup[], keyOf: (g: AiUsageGroup) => string, labelOf
   return [...m.values()].sort((a, b) => b.g - a.g);
 }
 
-export function ImpactTab({ load, runs, devices }: { load(hours: number): Promise<AiUsage>; runs: RunView[]; devices: DeviceView[] }) {
+export function ImpactTab({
+  load,
+  runs,
+  devices,
+  screenshotScale,
+  onOpenResearch,
+}: {
+  load(hours: number): Promise<AiUsage>;
+  runs: RunView[];
+  devices: DeviceView[];
+  /** Size the agent sends screenshots at now (1 = full size). */
+  screenshotScale: number;
+  onOpenResearch(): void;
+}) {
   const [hours, setHours] = useState(RANGES[0]!.hours);
   const [usage, setUsage] = useState<AiUsage | null>(null);
   const [failed, setFailed] = useState(false);
@@ -62,6 +76,9 @@ export function ImpactTab({ load, runs, devices }: { load(hours: number): Promis
   const tokens = groups.reduce((n, g) => n + g.tokensIn + g.tokensOut, 0);
   const calls = groups.reduce((n, g) => n + g.calls, 0);
   const cost = groups.reduce((n, g) => n + g.costUsd, 0);
+  const tokensInAll = groups.reduce((n, g) => n + g.tokensIn, 0);
+  const imageTokens = groups.reduce((n, g) => n + (g.imageTokens ?? 0), 0);
+  const imagePct = tokensInAll ? Math.round((100 * imageTokens) / tokensInAll) : 0;
   const requests = usage?.requests ?? 0;
   const perRequest = requests ? totalG / requests : 0;
   const fitInMacMini = perRequest ? Math.round((NEW_MACHINE.kgCo2e * 1000) / perRequest) : 0;
@@ -176,6 +193,19 @@ export function ImpactTab({ load, runs, devices }: { load(hours: number): Promis
                 <b>{top.label}</b> is {Math.round((100 * top.g) / totalG)}% of it. {KIND[top.key]?.lever ?? ""}
               </p>
             )}
+            <div className="impact__callout">
+              {imageTokens > 0 ? (
+                <p>
+                  <b>Screenshots are {imagePct}% of the tokens Gemini reads</b> ({fmtInt(imageTokens)} of {fmtInt(tokensInAll)}), sent at{" "}
+                  {Math.round(screenshotScale * 100)}% size. Research tests whether smaller screenshots or a lighter model read just as accurately.
+                </p>
+              ) : (
+                <p>Screenshot tokens are tracked from now on; new requests show how much of the AI's reading is images.</p>
+              )}
+              <button className="link-btn" onClick={onOpenResearch}>
+                Open Research
+              </button>
+            </div>
             <Shares parts={byKind} total={totalG} />
           </section>
 
@@ -214,7 +244,7 @@ function Shares({ parts, total }: { parts: Part[]; total: number }) {
             <span className="impact__name">
               {p.label}
               <small>
-                {fmtInt(p.tokens)} tokens · {fmtInt(p.calls)} call{p.calls === 1 ? "" : "s"}
+                {fmtInt(p.tokens)} tokens{p.img ? ` (${Math.round((100 * p.img) / p.tokens)}% screenshots)` : ""} · {fmtInt(p.calls)} call{p.calls === 1 ? "" : "s"}
               </small>
             </span>
             <span className="impact__track" aria-hidden>

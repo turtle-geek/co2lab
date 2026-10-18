@@ -34,7 +34,7 @@ export class MemoryRepository implements Repository {
     if (this.telemetry.length > MAX_ROWS) this.telemetry.splice(0, this.telemetry.length - MAX_ROWS);
   }
   async aiUsage(sinceMs: number) {
-    const groups = new Map<string, { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number }>();
+    const groups = new Map<string, { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number; imageTokens: number }>();
     const runs = new Map<string, { runId: string; tier: string; firstAt: number; calls: number; tokensIn: number; tokensOut: number }>();
     for (const s of this.steps) {
       if (s.time < sinceMs || s.tokensIn + s.tokensOut <= 0) continue;
@@ -49,8 +49,9 @@ export class MemoryRepository implements Repository {
         runs.set(rk, r);
       }
       const key = `${s.deviceId}|${s.kind}|${tier}`;
-      const g = groups.get(key) ?? { deviceId: s.deviceId, kind: s.kind, tier, calls: 0, tokensIn: 0, tokensOut: 0 };
+      const g = groups.get(key) ?? { deviceId: s.deviceId, kind: s.kind, tier, calls: 0, tokensIn: 0, tokensOut: 0, imageTokens: 0 };
       g.calls += 1;
+      g.imageTokens += typeof s.detail.imageTokens === "number" ? s.detail.imageTokens : 0;
       g.tokensIn += s.tokensIn;
       g.tokensOut += s.tokensOut;
       groups.set(key, g);

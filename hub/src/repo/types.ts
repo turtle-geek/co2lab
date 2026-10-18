@@ -96,7 +96,7 @@ export interface Repository {
   /** Gemini calls since `sinceMs`, summed per device / step kind / model tier, and the requests they served. */
   aiUsage(sinceMs: number): Promise<{
     requests: number;
-    groups: { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number }[];
+    groups: { deviceId: string | null; kind: string; tier: string; calls: number; tokensIn: number; tokensOut: number; imageTokens: number }[];
     /** Per request and model tier. */
     runs: { runId: string; tier: string; firstAt: number; calls: number; tokensIn: number; tokensOut: number }[];
   }>;

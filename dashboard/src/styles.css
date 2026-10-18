@@ -1940,3 +1940,7 @@ code {
   .impact__row { grid-template-columns: 1fr 64px; gap: 4px 10px; }
   .impact__name { grid-column: 1 / -1; }
 }
+.impact__callout { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #fff; border: 1px solid var(--card-edge); border-left: 4px solid var(--green); border-radius: var(--radius-sm); padding: 10px 14px; margin: 0 0 12px; }
+.impact__callout p { margin: 0; flex: 1 1 280px; color: var(--ink-2); font-size: 0.9rem; }
+.impact__callout b { color: var(--ink); }
+.impact__name small { white-space: normal; }

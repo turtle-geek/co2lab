@@ -223,7 +223,7 @@ export class RunManager {
         subtaskId: subtask?.id ?? null,
         deviceId: subtask?.deviceId ?? null,
         kind,
-        detail: { tier: u.tier },
+        detail: { tier: u.tier, imageTokens: u.imageTokens, screenshotScale: r.config.screenshotScale },
         tokensIn: u.tokensIn,
         tokensOut: u.tokensOut,
         model: u.model,

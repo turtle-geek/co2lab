@@ -16,6 +16,8 @@ export interface Usage {
   model: string;
   tokensIn: number;
   tokensOut: number;
+  /** Part of tokensIn that came from images (screenshots), as Gemini reports per modality. */
+  imageTokens: number;
   burn: Burn;
 }
 
@@ -148,7 +150,8 @@ export async function callJson<S extends z.ZodType>(opts: {
         const um = res.usageMetadata;
         const tokensIn = um?.promptTokenCount ?? 0;
         const tokensOut = (um?.candidatesTokenCount ?? 0) + (um?.thoughtsTokenCount ?? 0);
-        opts.onUsage({ tier: opts.tier, model, tokensIn, tokensOut, burn: burnFor(opts.tier, tokensIn, tokensOut) });
+        const imageTokens = (um?.promptTokensDetails ?? []).filter((d) => String(d.modality) === "IMAGE").reduce((n, d) => n + (d.tokenCount ?? 0), 0);
+        opts.onUsage({ tier: opts.tier, model, tokensIn, tokensOut, imageTokens, burn: burnFor(opts.tier, tokensIn, tokensOut) });
         text = res.text;
         break;
       } catch (err) {
