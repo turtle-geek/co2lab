@@ -202,6 +202,7 @@ export function App({ backend, viewerToken }: { backend: Backend; viewerToken: s
                 connected={connected}
                 onAdd={openPair}
                 onRevoke={(id) => hub.send({ type: "device.revoke", deviceId: id })}
+                onRename={(id, name) => hub.send({ type: "device.rename", deviceId: id, name })}
               />
             </>
           )}

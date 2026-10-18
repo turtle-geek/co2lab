@@ -90,9 +90,22 @@ function TelemetryLine({ device, now }: { device: DeviceView; now: number }) {
 
 const KIND_LABEL: Record<DeviceView["kind"], string> = { android: "Phone", laptop: "Laptop", desktop: "Desktop", cloud: "Cloud" };
 
-export function TreeCard({ device, readOnly, onRevoke, frame }: { device: DeviceView; readOnly: boolean; onRevoke(id: string): void; frame?: LiveFrame }) {
+export function TreeCard({
+  device,
+  readOnly,
+  onRevoke,
+  onRename,
+  frame,
+}: {
+  device: DeviceView;
+  readOnly: boolean;
+  onRevoke(id: string): void;
+  onRename(id: string, name: string): void;
+  frame?: LiveFrame;
+}) {
   const now = useNow();
   const [confirming, setConfirming] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const task = device.currentTask;
   return (
     <article className={`card tree-card tree-card--${device.state}`} aria-label={`${device.name}, ${STATE_LABEL[device.state]}`}>
@@ -124,7 +137,16 @@ export function TreeCard({ device, readOnly, onRevoke, frame }: { device: Device
         {device.note && <p className={`tree-card__note tree-card__note--${device.state}`}>{device.note}</p>}
         {sharesLine(device) && <p className="tree-card__shares">Shares: {sharesLine(device)}</p>}
         {!readOnly && device.state !== "revoked" && (
-          confirming ? (
+          renaming ? (
+            <RenameField
+              name={device.name}
+              onSave={(name) => {
+                if (name !== device.name) onRename(device.id, name);
+                setRenaming(false);
+              }}
+              onCancel={() => setRenaming(false)}
+            />
+          ) : confirming ? (
             <span className="tree-card__confirm" role="group" aria-label={`Revoke ${device.name}?`}>
               Revoke?
               <button className="link-btn tree-card__yes" onClick={() => onRevoke(device.id)}>
@@ -135,13 +157,49 @@ export function TreeCard({ device, readOnly, onRevoke, frame }: { device: Device
               </button>
             </span>
           ) : (
-            <button className="link-btn tree-card__revoke" onClick={() => setConfirming(true)}>
-              Revoke
-            </button>
+            <span className="tree-card__actions">
+              <button className="link-btn tree-card__revoke" onClick={() => setRenaming(true)}>
+                Rename
+              </button>
+              <button className="link-btn tree-card__revoke" onClick={() => setConfirming(true)}>
+                Revoke
+              </button>
+            </span>
           )
         )}
       </div>
     </article>
+  );
+}
+
+/** Inline name editor: Enter or Save keeps it, Esc or Cancel drops it. */
+function RenameField({ name, onSave, onCancel }: { name: string; onSave(name: string): void; onCancel(): void }) {
+  const [value, setValue] = useState(name);
+  const clean = value.trim().slice(0, 60);
+  return (
+    <form
+      className="tree-card__rename"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (clean) onSave(clean);
+      }}
+    >
+      <input
+        autoFocus
+        value={value}
+        maxLength={60}
+        aria-label="Device name"
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && onCancel()}
+        onFocus={(e) => e.currentTarget.select()}
+      />
+      <button className="link-btn tree-card__yes tree-card__save" disabled={!clean}>
+        Save
+      </button>
+      <button type="button" className="link-btn" onClick={onCancel}>
+        Cancel
+      </button>
+    </form>
   );
 }
 
@@ -164,6 +222,7 @@ export function DeviceGrid({
   readOnly,
   connected,
   onRevoke,
+  onRename,
   onAdd,
   frames,
 }: {
@@ -173,6 +232,7 @@ export function DeviceGrid({
   readOnly: boolean;
   connected: boolean;
   onRevoke(id: string): void;
+  onRename(id: string, name: string): void;
   onAdd(): void;
 }) {
   const { ordered, dragId, cardRef, dragProps } = useCardOrder(devices, !readOnly);
@@ -185,7 +245,7 @@ export function DeviceGrid({
           className={dragId === d.id ? "card-slot card-slot--dragging" : "card-slot"}
           {...dragProps(d.id)}
         >
-          <TreeCard device={d} readOnly={readOnly} onRevoke={onRevoke} frame={frames?.[d.id]} />
+          <TreeCard device={d} readOnly={readOnly} onRevoke={onRevoke} onRename={onRename} frame={frames?.[d.id]} />
         </div>
       ))}
       {!readOnly && <AddDeviceCard onClick={onAdd} disabled={!connected} />}
@@ -377,7 +437,7 @@ function useCardOrder(devices: DeviceView[], enabled: boolean) {
       enabled
         ? {
             onPointerDown: (e: PointerEvent<HTMLElement>) => {
-              if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input")) return;
+              if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input, form")) return;
               const r = e.currentTarget.getBoundingClientRect();
               drag.current = { id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, grabX: e.clientX - r.left, grabY: e.clientY - r.top, active: false, lastX: e.clientX, lastY: e.clientY };
               // capture now, so a fast move that leaves the card before the drag starts still reaches it

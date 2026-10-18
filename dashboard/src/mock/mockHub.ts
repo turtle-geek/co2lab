@@ -193,6 +193,8 @@ export class MockHub {
         return;
       case "device.revoke":
         return this.revoke(msg.deviceId);
+      case "device.rename":
+        return this.patch(msg.deviceId, { name: msg.name });
       case "viewer.create": {
         const token = `v-${Math.random().toString(36).slice(2, 12)}`;
         this.sendTo(sock, { type: "viewer.link", url: `${location.origin}/?mock=1&viewer=${token}`, expiresAt: Date.now() + (msg.ttlMinutes ?? 120) * 60_000 });

@@ -569,6 +569,8 @@ export const ClientToHub = z.discriminatedUnion("type", [
   z.object({ type: z.literal("devicecode.approve"), userCode: z.string(), name: z.string().trim().min(1).max(60).optional() }),
   z.object({ type: z.literal("devicecode.deny"), userCode: z.string() }),
   z.object({ type: z.literal("device.revoke"), deviceId: z.string() }),
+  /** The owner renames a device; the device learns its new name on its next hello.ok. */
+  z.object({ type: z.literal("device.rename"), deviceId: z.string(), name: z.string().trim().min(1).max(60) }),
   z.object({ type: z.literal("viewer.create"), ttlMinutes: z.number().int().min(5).max(24 * 60).optional() }),
   z.object({ type: z.literal("share.request"), runId: z.string(), target: z.string() }),
   z.object({ type: z.literal("approval.respond"), approvalId: z.string(), approve: z.boolean() }),

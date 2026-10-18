@@ -201,6 +201,11 @@ export class DeviceRegistry {
     return out;
   }
 
+  async rename(d: LiveDevice, name: string) {
+    d.rec.name = name;
+    await this.repo.upsertDevice(d.rec);
+  }
+
   async revoke(d: LiveDevice, now = Date.now()) {
     d.rec.revokedAt = now;
     d.online = false;

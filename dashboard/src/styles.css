@@ -1901,3 +1901,12 @@ code {
 .burn-info__note { margin: 10px 0 0; color: var(--muted); font-size: 0.75rem; }
 @media (max-width: 700px) { .burn-info { left: 0; right: auto; } }
 @media (max-width: 560px) { .burn-wrap { flex-basis: 100%; } }
+
+/* Rename · Revoke on the card, and the inline name editor */
+.tree-card__actions { display: flex; gap: 12px; align-items: center; }
+.tree-card__rename { display: flex; align-items: center; gap: 8px; min-height: 1.4em; animation: confirm-in 0.18s ease both; }
+.tree-card__rename input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.85rem; padding: 3px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); }
+.tree-card__rename input:focus { outline: 2px solid var(--green); outline-offset: 0; border-color: transparent; }
+.tree-card__save { color: var(--green-deep); }
+.tree-card__save:disabled { opacity: 0.4; }
+.tree-card__rename .link-btn { font-size: 0.8rem; }

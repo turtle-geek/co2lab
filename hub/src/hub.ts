@@ -401,6 +401,17 @@ export class Hub {
         this.broadcastOwners(this.deviceCodeList());
         return;
       }
+      case "device.rename": {
+        const d = this.devices.get(msg.deviceId);
+        if (!d || d.rec.revokedAt) {
+          this.sendRaw(ws, { type: "error", code: "not_found", message: "no such device" });
+          return;
+        }
+        await this.devices.rename(d, msg.name);
+        this.publishDevice(d);
+        log.info(`renamed ${d.rec.id} to ${msg.name}`);
+        return;
+      }
       case "device.revoke": {
         const d = this.devices.get(msg.deviceId);
         if (!d || d.rec.revokedAt) {
